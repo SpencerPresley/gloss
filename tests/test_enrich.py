@@ -89,3 +89,36 @@ def test_enrich_units_concurrent_resumes(tmp_path):
     keys = [json.loads(l)["key"] for l in ckpt.read_text().splitlines() if l.strip()]
     assert len(rows) == 10
     assert len(keys) == 10 and len(set(keys)) == 10    # no re-enrichment, no dupes
+
+
+def test_enrich_units_concurrent_builds_chat_once(tmp_path):
+    # The warmup must build the OllamaExtractor's chat (and pin its method) ONCE before the
+    # pool starts, so concurrent workers only READ shared state — no lazy-init/probe race.
+    import threading
+    from gloss.segment import RawUnit
+    from gloss.extract import OllamaExtractor
+    from gloss.enrich import enrich_units, Enrichment
+
+    builds = []
+    lock = threading.Lock()
+
+    class _FakeRunnable:
+        def invoke(self, messages):
+            return {"parsed": Enrichment(principle="p", type="rationale", context_line="c",
+                                         applies_when="a", key_terms=["k"], questions=["q?"]),
+                    "parsing_error": None}
+
+    class _FakeChat:
+        def with_structured_output(self, schema, method, include_raw):
+            return _FakeRunnable()
+
+    def factory():
+        with lock:
+            builds.append(1)
+        return _FakeChat()
+
+    ex = OllamaExtractor("fake", chat_factory=factory)
+    units = [RawUnit(f"u{i}", "6", "6.1", 50) for i in range(15)]
+    enrich_units(units, {"6.1": "s"}, ex, card="C", template="{card}{section}{passage}",
+                 system="s", checkpoint=tmp_path / "u.jsonl", max_workers=4)
+    assert builds == [1]   # chat built exactly once (warmup), not once-per-thread

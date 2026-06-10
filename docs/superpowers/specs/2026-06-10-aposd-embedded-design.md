@@ -294,7 +294,7 @@ into atlascyber" = copy `aposd.db` + one script, zero `pip install`. Build-time 
   ```
   aposd-embedded/
     pyproject.toml              # uv; [build] deps: pymupdf, langchain, langchain-ollama, pydantic, pyyaml
-    src/aposd/                  # ENGINE — corpus-agnostic
+    src/gloss/                  # ENGINE — corpus-agnostic (working name "gloss"; see notes/naming.md)
       parse.py                  # PyMuPDF font-aware extraction; parse_pdf(path, ..., profile)
       segment.py                # deterministic units; segment(elements, profile)
       extract.py                # StructuredExtractor protocol + StubExtractor (provider-agnostic)

@@ -18,6 +18,7 @@
 
 These thread through several tasks. Where a v1 task sketch below conflicts, the spec (§5/§6/§11/§13) and these deltas win:
 
+- **Engine package = `gloss`** (working name; see `docs/superpowers/notes/2026-06-10-naming.md`): `src/gloss/`, CLI `gloss`, imports `gloss.*`. The instance stays `corpora/aposd/` and its artifact `aposd.db`. Where v1 snippets below show `aposd.*` / `src/aposd/` for the *engine*, read `gloss`.
 - **Engine/instance split:** corpus-specific values live in `corpora/aposd/` — `profile.py` (a `ParseProfile`: code/head font substrings, chapter/section sizes, `figure_min_area`, `section_re`, `corpus_path`, `chapter_pages`), `taxonomy.yaml`, `prompt.md`, `cases.yaml`. Engine code in `src/aposd/` stays corpus-agnostic.
 - **`parse_pdf(path, first, last, profile)` / `classify_font(font, profile)`** take the profile — no module-level font/size constants. `segment(elements, profile, chapter)` uses `profile.section_re`.
 - **Enrichment prompt is instance config:** `corpora/aposd/prompt.md` carries a real **system prompt** (role + "return primary source, never paraphrase" guardrail + symptom-vocabulary instruction) and the user **template**. `build_prompt(unit, section_text, card, template)`; `enrich_units(..., template, system, checkpoint)` passes `system` to `extractor.extract(..., system=system)`.

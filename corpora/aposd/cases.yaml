@@ -1,0 +1,10 @@
+# Eval cases for the APOSD corpus. Ch.6 build = general-purpose only, so these
+# target that principle as a smoke test; section-level + cross-principle cases
+# get added once the full book is built.
+cases:
+  - query: "should I make this API general purpose or special purpose"
+    expect_principle: general-purpose
+  - query: "this method is named after one specific caller use case"
+    expect_principle: general-purpose
+  - query: "should I add a configuration parameter for this special case"
+    expect_principle: general-purpose

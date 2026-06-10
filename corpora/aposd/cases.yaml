@@ -15,7 +15,7 @@ cases:
     expect_principle: information-hiding
   - query: "the same design decision is duplicated across two different modules"
     expect_principle: information-hiding
-  - query: "this method just passes its arguments straight through to the layer below"
+  - query: "callers have to know how this class stores its data internally"
     expect_principle: information-hiding
   # general-purpose
   - query: "should I make this API general purpose or special purpose"

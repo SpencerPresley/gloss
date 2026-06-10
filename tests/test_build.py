@@ -79,6 +79,30 @@ def test_run_build_indexes_summary_appendices(tmp_path, corpus_path):
     assert "summary-principles" in chapters
 
 
+def test_run_build_sets_principle_from_taxonomy_not_llm(tmp_path, corpus_path):
+    # The coarse principle is a chapter attribute from the taxonomy, NOT the LLM's guess.
+    # A stub returning a bogus principle must be overridden: carded chapter -> its taxonomy
+    # slug; null chapter and appendix -> "" (empty), never an invented slug.
+    import sqlite3
+    from gloss.build import run_build
+    from gloss.extract import StubExtractor
+    stub = StubExtractor({"principle": "bogus_invented_slug", "type": "rationale",
+                          "context_line": "c", "applies_when": "a",
+                          "key_terms": ["k"], "questions": ["q?"]})
+    db = tmp_path / "aposd.db"
+    run_build(chapter=None, model="stub", db=db, resume=False,
+              extractor=stub, build_dir=tmp_path / "build")
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    ch6 = {r["principle"] for r in con.execute("SELECT principle FROM units WHERE chapter='6'")}
+    ch10 = {r["principle"] for r in con.execute("SELECT principle FROM units WHERE chapter='10'")}
+    appendix = {r["principle"] for r in con.execute("SELECT principle FROM units WHERE chapter='summary-redflags'")}
+    con.close()
+    assert ch6 == {"general-purpose"}      # carded chapter -> taxonomy slug, not the stub's bogus value
+    assert ch10 == {""}                     # null chapter -> empty, not an invented slug
+    assert appendix == {""}                 # appendix -> empty
+
+
 def test_run_build_unknown_chapter_raises(tmp_path, corpus_path):
     import pytest
     from gloss.build import run_build

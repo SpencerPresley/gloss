@@ -110,6 +110,12 @@ def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE,
             checkpoint.unlink()
         rows = enrich_units(units, section_texts, extractor, card=card, template=template,
                             system=system, checkpoint=checkpoint, max_workers=workers)
+        # The coarse principle is a chapter attribute from the taxonomy, not an LLM
+        # classification: overriding here keeps the facet a closed set (the 6 slugs or
+        # empty) and stops null-principle chapters from inventing their own slugs. Applied
+        # to read-back rows too, so a --resume regenerates the db correctly with no re-enrichment.
+        for row in rows:
+            row["principle"] = principle or ""
         failed = sum(r["needs_enrich"] for r in rows)
         print(f"  ch{cid}: {len(rows)} units ({failed} failed) principle={principle or 'null'}")
         all_rows += rows

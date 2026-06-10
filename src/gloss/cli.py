@@ -30,7 +30,7 @@ def cmd_build(args) -> None:
     """Build the corpus db (lazy import: build-only deps stay off the retrieve path)."""
     from .build import run_build
     run_build(chapter=args.chapter, model=args.model, db=Path(args.db),
-              resume=args.resume, workers=args.workers)
+              resume=args.resume, workers=args.workers, build_dir=Path(args.build_dir))
 
 
 def cmd_eval(args) -> None:
@@ -59,6 +59,9 @@ def main(argv: list[str] | None = None) -> None:
     b.add_argument("--db", default="aposd.db")
     b.add_argument("--resume", action="store_true")
     b.add_argument("--workers", type=int, default=1, help="concurrent enrichment requests")
+    b.add_argument("--build-dir", default="build",
+                   help="root for per-chapter JSONL checkpoints; use a distinct dir per "
+                        "model (e.g. build/minimax) so builds don't clobber each other")
     b.set_defaults(func=cmd_build)
 
     e = sub.add_parser("eval", help="score retrieval against eval cases")

@@ -1,10 +1,43 @@
-# Eval cases for the APOSD corpus. Ch.6 build = general-purpose only, so these
-# target that principle as a smoke test; section-level + cross-principle cases
-# get added once the full book is built.
+# Eval cases for the full APOSD corpus. Symptom-phrased (how a developer describes
+# their own code), seeded from the skill's Quick-Diagnostic + Common-Mistakes and
+# spanning all six coarse principles. expect_principle is robust to section drift;
+# a few expect_section cases pin known passages. Refine after the full build.
 cases:
+  # deep-modules
+  - query: "this small class just forwards calls to another class and adds almost nothing"
+    expect_principle: deep-modules
+  - query: "the interface has way more methods than the functionality seems to justify"
+    expect_principle: deep-modules
+  - query: "should I split this big class into several smaller classes"
+    expect_principle: deep-modules
+  # information-hiding
+  - query: "callers have to call setup in the right order before this works"
+    expect_principle: information-hiding
+  - query: "the same design decision is duplicated across two different modules"
+    expect_principle: information-hiding
+  - query: "this method just passes its arguments straight through to the layer below"
+    expect_principle: information-hiding
+  # general-purpose
   - query: "should I make this API general purpose or special purpose"
     expect_principle: general-purpose
-  - query: "this method is named after one specific caller use case"
+  - query: "I added a boolean flag to handle one special case"
     expect_principle: general-purpose
-  - query: "should I add a configuration parameter for this special case"
+  - query: "this method is named after the one caller that uses it"
     expect_principle: general-purpose
+  - query: "general-purpose text editor changePosition method"
+    expect_section: "6.3"
+  # complexity
+  - query: "a small change forces edits in many unrelated places"
+    expect_principle: complexity
+  - query: "you need a lot of hidden context to change this safely"
+    expect_principle: complexity
+  # comments
+  - query: "the comment just restates what the code already says"
+    expect_principle: comments
+  - query: "should the comment describe what isn't obvious from the code"
+    expect_principle: comments
+  # strategic-programming
+  - query: "we keep skipping design to ship features faster"
+    expect_principle: strategic-programming
+  - query: "is getting the code working enough or should I invest in design"
+    expect_principle: strategic-programming

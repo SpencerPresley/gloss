@@ -26,3 +26,19 @@ def test_score_cases_miss(tmp_path):
     db = tmp_path / "aposd.db"; build_db(_ROWS, db)
     cases = [{"query": "module interface complex", "expect_section": "9.9"}]  # no such section
     assert score_cases(db, cases, k=3)["hit_rate"] == 0.0
+
+
+def test_cases_span_principles_and_are_wellformed():
+    import yaml
+    cases = yaml.safe_load(open("corpora/aposd/cases.yaml"))["cases"]
+    assert len(cases) >= 10
+    principles = {"complexity", "deep-modules", "information-hiding",
+                  "general-purpose", "comments", "strategic-programming"}
+    seen = set()
+    for c in cases:
+        assert "query" in c
+        assert ("expect_principle" in c) or ("expect_section" in c)
+        if c.get("expect_principle"):
+            assert c["expect_principle"] in principles
+            seen.add(c["expect_principle"])
+    assert len(seen) >= 5   # cases cover at least 5 of the 6 principles

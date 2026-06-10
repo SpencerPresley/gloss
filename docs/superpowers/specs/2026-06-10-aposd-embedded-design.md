@@ -162,7 +162,13 @@ pass diffs it against the book's parsed chapter/section structure and lists topi
    `key_terms`, `applies_when`, biased toward the skill's query vocabulary. **Strict separation:**
    substantive content comes *only* from the passage (`temperature=0`, "use only information
    present in the provided text; if unknown, omit"); the card supplies *which principle bucket and
-   preferred phrasing*, never facts. Each completed unit is checkpointed (JSONL) immediately.
+   preferred phrasing*, never facts. The situating context is the unit's **section** (a bounded,
+   coherent slice — not the whole chapter), and the call carries a real **system prompt** (role +
+   the primary-source/no-paraphrase guardrail + symptom-vocabulary instruction). `num_ctx` is
+   **measured** from the real prompts (`build.py`: conservative `chars//3` + headroom, capped + a
+   warning, with Ollama's real `prompt_eval_count` logged) — never a guessed constant; it's a
+   local-model guardrail since cloud models manage their own context. Each completed unit is
+   checkpointed (JSONL) immediately.
 4. **Load** — assemble `aposd.db` (units + FTS5 + triggers + optimize).
 
 ### Model strategy (`(model, method)`-configurable, eval-driven)
@@ -197,12 +203,15 @@ The pipeline never imports LangChain or Ollama. It depends on a one-method seam:
 
 ```python
 class StructuredExtractor(Protocol):
-    def extract(self, prompt: str, schema: type[BaseModel]) -> BaseModel: ...
+    def extract(self, prompt: str, schema: type[BaseModel], *, system: str | None = None) -> BaseModel: ...
 ```
 
-Exactly **one** adapter is built now — `OllamaExtractor` — which owns *all* provider-specific
-knowledge: model loading, the `json_schema`-vs-`function_calling` method branch, `num_ctx`,
-retries, validation. The enrichment pipeline calls `extractor.extract(...)` and knows nothing
+Exactly **one** adapter is built now — `OllamaExtractor`. It **auto-discovers** the structured-output
+method: tries `json_schema` (Ollama's grammar-constrained `format=`), falls back to `function_calling`
+if the model ignores the schema (minimax emits prose), and **pins** whatever works. No per-model lore,
+no brittle `:cloud` heuristic — unknown models self-resolve (cost: one wasted probe on the first unit,
+then pinned). An optional `method=` arg skips the probe when the method is already known; `num_ctx` is
+passed in (measured by the orchestrator). The pipeline calls `extractor.extract(...)` and knows nothing
 about models. Near-zero cost (the adapter is code we write anyway), three payoffs:
 - **Testability now:** unit-test the whole enrichment pipeline against a deterministic *stub*
   extractor — no model calls.
@@ -284,18 +293,23 @@ into atlascyber" = copy `aposd.db` + one script, zero `pip install`. Build-time 
 - Sketch:
   ```
   aposd-embedded/
-    pyproject.toml          # uv; [build] deps: pymupdf, langchain, langchain-ollama, pydantic
-    src/aposd/
-      parse.py              # PyMuPDF font-aware extraction
-      segment.py            # deterministic unit boundaries
-      extract.py            # StructuredExtractor Protocol + OllamaExtractor adapter (provider-specific)
-      enrich.py             # enrichment pipeline (uses StructuredExtractor; checkpointed)
-      store.py              # SQLite/FTS5 build + the query (stdlib only)
-      cli.py                # argparse; retrieve / build / eval
-    eval/cases.yaml
+    pyproject.toml              # uv; [build] deps: pymupdf, langchain, langchain-ollama, pydantic, pyyaml
+    src/aposd/                  # ENGINE — corpus-agnostic
+      parse.py                  # PyMuPDF font-aware extraction; parse_pdf(path, ..., profile)
+      segment.py                # deterministic units; segment(elements, profile)
+      extract.py                # StructuredExtractor protocol + StubExtractor (provider-agnostic)
+                                #   + OllamaExtractor adapter (Ollama lore encapsulated in the class)
+      enrich.py                 # enrichment pipeline (depends only on the protocol; checkpointed)
+      store.py                  # SQLite/FTS5 build + query (stdlib only)
+      cli.py                    # argparse; retrieve / build / eval
+    corpora/aposd/              # INSTANCE — everything APOSD-specific
+      profile.py                # ParseProfile: fonts, sizes, figure-area, section regex, pages, corpus path
+      taxonomy.yaml             # the 6 principles (coarse) + book topics (fine)
+      prompt.md                 # enrichment system prompt + user template
+      cases.yaml                # eval cases
+      source.pdf                # the corpus (gitignored)
     tests/
-    resources/…pdf          # gitignored (local, copyrighted)
-    aposd.db                # built artifact
+    aposd.db                    # built artifact for this instance
   ```
 - **git:** local repo, no remote yet. `.env` gitignored (no secrets expected; Ollama cloud
   auth is `ollama signin`). PDFs gitignored (large + copyrighted).
@@ -325,10 +339,17 @@ skills/subagents, and is portable into atlascyber (any agent shells out).
    by model. **One model per build — no automatic fallback;** a quota cap → checkpoint + wait +
    `--resume` (uniform quality over convenience). Local `gpt-oss:20b` is an explicit dev/iteration model.
 7. **Store:** SQLite FTS5, single portable file, stdlib-only at query time.
-8. **Extraction interface:** build depends on a one-method `StructuredExtractor` seam; one
-   `OllamaExtractor` adapter now (provider/method knowledge hidden inside). Cheap decoupling from
-   Ollama/LangChain, enables stub-based pipeline tests, no bet on `with_structured_output` being universal.
+8. **Extraction interface:** one-method `StructuredExtractor` seam (+ optional `system`), kept free of
+   provider imports; the sole `OllamaExtractor` **auto-discovers** the method (try `json_schema` → fall
+   back to `function_calling`, pin the winner; optional override) with its method list as a private class
+   attribute. Stub-testable; no bet on `with_structured_output` being universal.
 9. **Distribution:** deferred to a future session (documented in §11, not built now).
+10. **Engine vs instance:** corpus-agnostic engine (`src/aposd/`) vs the APOSD instance (`corpora/aposd/`:
+    `ParseProfile`, taxonomy, prompt, cases, source PDF). Profile/taxonomy/prompt/corpus-path are loaded
+    inputs, never hardcoded in engine logic. A second corpus = a new dir, not a refactor.
+11. **Context sizing:** each unit is situated in its **section** (bounded); `num_ctx` is measured from real
+    prompts (`chars//3` conservative, capped + warned, real `prompt_eval_count` logged), not guessed. Local-only.
+12. **Docstrings:** Google-style on every public module/class/function (APOSD interface comments).
 
 ## 14. Research findings & sources (grounding)
 

@@ -14,6 +14,17 @@
 
 ---
 
+## Revision deltas (agreed after v1 — apply during execution; the spec is authoritative)
+
+These thread through several tasks. Where a v1 task sketch below conflicts, the spec (§5/§6/§11/§13) and these deltas win:
+
+- **Engine/instance split:** corpus-specific values live in `corpora/aposd/` — `profile.py` (a `ParseProfile`: code/head font substrings, chapter/section sizes, `figure_min_area`, `section_re`, `corpus_path`, `chapter_pages`), `taxonomy.yaml`, `prompt.md`, `cases.yaml`. Engine code in `src/aposd/` stays corpus-agnostic.
+- **`parse_pdf(path, first, last, profile)` / `classify_font(font, profile)`** take the profile — no module-level font/size constants. `segment(elements, profile, chapter)` uses `profile.section_re`.
+- **Enrichment prompt is instance config:** `corpora/aposd/prompt.md` carries a real **system prompt** (role + "return primary source, never paraphrase" guardrail + symptom-vocabulary instruction) and the user **template**. `build_prompt(unit, section_text, card, template)`; `enrich_units(..., template, system, checkpoint)` passes `system` to `extractor.extract(..., system=system)`.
+- **`num_ctx` measured in `build.py`:** `_choose_num_ctx(prompts)` = `max(len(p)//3) + headroom`, floored and capped, warns if exceeded; log Ollama's real `prompt_eval_count`. Pass to `OllamaExtractor(model, num_ctx=...)`. Local-only.
+- **`OllamaExtractor`** is the auto-discovering version in Task 4 (method list a private class attribute; optional `method=` override; `system` support; injectable `chat_factory`).
+- **Google docstrings** on every public symbol.
+
 ## Conventions
 
 - Run everything through uv: `uv run pytest …`, `uv run aposd …`.
@@ -21,6 +32,9 @@
 - Chapter 6 = PDF pages 50–58 (book pages 42–50). Known code on PDF p52–53 (`changePosition`, `text.delete`).
 - Fonts: code = substring `Typewriter`; heading = `NimbusSanL-Bol`; chapter title size ≈ 20.2, section ≈ 16.6, body ≈ 14.4, code ≈ 10.8. Match font names by **substring** (subset prefixes like `AAAAAE+`).
 - Commit after every task with the message shown in its final step.
+- **Engine vs instance:** `src/aposd/` is the corpus-agnostic engine; `corpora/aposd/` holds the instance. Never hardcode corpus/profile/taxonomy/prompt in engine logic — they're loaded inputs.
+- **Docstrings:** Google-style on every public module/class/function.
+- **`num_ctx` is measured, not guessed:** size from the real prompts (`chars//3` — conservative; undercounting truncates) + headroom, capped with a warning; log Ollama's real `prompt_eval_count`. Local-model guardrail only (cloud manages its own context).
 
 ---
 
@@ -405,21 +419,41 @@ git add -A && git commit -m "feat(segment): deterministic prose/code units + sec
 ```python
 # tests/test_extract.py
 from pydantic import BaseModel
-from aposd.extract import StubExtractor, default_method
+from aposd.extract import StubExtractor, OllamaExtractor
 
 class _S(BaseModel):
     a: int
 
-def test_default_method_branches_by_model():
-    assert default_method("minimax-m3:cloud") == "function_calling"
-    assert default_method("gpt-oss:120b-cloud") == "function_calling"
-    assert default_method("gpt-oss:20b") == "json_schema"
-    assert default_method("llama3.1:8b") == "json_schema"
-
 def test_stub_extractor_returns_schema_instance():
-    ex = StubExtractor({"a": 7})
-    out = ex.extract("anything", _S)
+    out = StubExtractor({"a": 7}).extract("anything", _S)
     assert isinstance(out, _S) and out.a == 7
+
+class _FakeRunnable:
+    def __init__(self, ok): self._ok = ok
+    def invoke(self, messages):
+        return ({"parsed": _S(a=1), "parsing_error": None} if self._ok
+                else {"parsed": None, "parsing_error": "ignored schema, returned prose"})
+
+class _FakeChat:
+    """Simulates a model (like minimax) that ignores json_schema but does function_calling."""
+    def __init__(self): self.calls = []
+    def with_structured_output(self, schema, method, include_raw):
+        self.calls.append(method)
+        return _FakeRunnable(ok=(method == "function_calling"))
+
+def test_auto_discovers_and_pins_method():
+    chat = _FakeChat()
+    ex = OllamaExtractor("minimax-m3:cloud", chat_factory=lambda: chat)
+    assert isinstance(ex.extract("p", _S), _S)
+    assert chat.calls == ["json_schema", "function_calling"]   # tried, fell back
+    ex.extract("p2", _S)
+    assert chat.calls == ["json_schema", "function_calling", "function_calling"]  # pinned
+
+def test_method_override_skips_probe():
+    chat = _FakeChat()
+    ex = OllamaExtractor("whatever", method="function_calling", chat_factory=lambda: chat)
+    ex.extract("p", _S)
+    assert chat.calls == ["function_calling"]   # no json_schema probe
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -431,49 +465,92 @@ Expected: FAIL (ImportError).
 
 ```python
 # src/aposd/extract.py
-"""The single seam between the build pipeline and any LLM provider.
+"""Single seam between the build pipeline and any LLM provider.
 
-The pipeline depends ONLY on the StructuredExtractor protocol. OllamaExtractor
-is the sole adapter today; it hides model loading and the json_schema-vs-
-function_calling branch. A future provider is a new adapter, not a refactor.
+The pipeline depends only on ``StructuredExtractor``; provider specifics live in
+adapters. This module has no top-level langchain/ollama import, so importing the
+protocol never drags in a provider.
 """
 from __future__ import annotations
-from typing import Protocol, runtime_checkable
+from typing import Callable, Protocol, runtime_checkable
 from pydantic import BaseModel
+
 
 @runtime_checkable
 class StructuredExtractor(Protocol):
-    def extract(self, prompt: str, schema: type[BaseModel]) -> BaseModel: ...
+    """Turn a prompt + Pydantic schema into a validated instance.
 
-def default_method(model: str) -> str:
-    # Cloud models (esp. minimax) ignore Ollama's format=/json_schema and need
-    # the tool-calling path; local models honor json_schema. Override-able.
-    return "function_calling" if model.endswith(":cloud") else "json_schema"
+    The one method the build pipeline depends on. Implementations hide all
+    provider/SDK details (method selection, retries, context sizing).
+    """
+
+    def extract(self, prompt: str, schema: type[BaseModel], *, system: str | None = None) -> BaseModel: ...
+
 
 class StubExtractor:
-    """Deterministic test double — returns the same payload for every call."""
-    def __init__(self, payload: dict):
+    """Deterministic test double; provider-agnostic, for testing the pipeline without a model."""
+
+    def __init__(self, payload: dict) -> None:
         self._payload = payload
-    def extract(self, prompt: str, schema: type[BaseModel]) -> BaseModel:
+
+    def extract(self, prompt: str, schema: type[BaseModel], *, system: str | None = None) -> BaseModel:
         return schema(**self._payload)
 
-class OllamaExtractor:
-    def __init__(self, model: str, method: str | None = None, num_ctx: int = 8192, max_retries: int = 2):
-        from langchain_ollama import ChatOllama  # imported lazily (build-only dep)
-        self.model = model
-        self.method = method or default_method(model)
-        self._llm = ChatOllama(model=model, temperature=0, num_ctx=num_ctx)
-        self._max_retries = max_retries
 
-    def extract(self, prompt: str, schema: type[BaseModel]) -> BaseModel:
-        structured = self._llm.with_structured_output(schema, method=self.method, include_raw=True)
-        last = None
-        for _ in range(self._max_retries + 1):
-            res = structured.invoke(prompt)
-            if res.get("parsed") is not None and res.get("parsing_error") is None:
-                return res["parsed"]
-            last = res.get("parsing_error")
-        raise ValueError(f"structured extraction failed for {self.model}: {last}")
+class OllamaExtractor:
+    """``StructuredExtractor`` backed by Ollama via langchain-ollama.
+
+    Auto-discovers which structured-output method the model honors and pins it.
+    All Ollama/LangChain specifics are encapsulated here.
+
+    Args:
+        model: Ollama model tag (e.g. ``"minimax-m3:cloud"``, ``"gpt-oss:20b"``).
+        num_ctx: context window for local models (measured by the caller; cloud ignores it).
+        method: optional override to skip auto-discovery when the method is already known.
+        chat_factory: injection point for tests; builds the chat model when omitted.
+    """
+
+    # Ollama-specific, private to this adapter: grammar-constrained json_schema
+    # first, tool-calling fallback for models that ignore format= (e.g. minimax).
+    _METHODS = ("json_schema", "function_calling")
+
+    def __init__(self, model: str, num_ctx: int = 16384, method: str | None = None,
+                 chat_factory: Callable[[], object] | None = None) -> None:
+        self.model = model
+        self._num_ctx = num_ctx
+        self._method = method            # if set, auto-discovery is skipped
+        self._chat = None
+        self._chat_factory = chat_factory
+
+    def _chat_model(self):
+        """Build (once) and cache the chat model; lazy import keeps the dep build-only."""
+        if self._chat is None:
+            if self._chat_factory is not None:
+                self._chat = self._chat_factory()
+            else:
+                from langchain_ollama import ChatOllama
+                self._chat = ChatOllama(model=self.model, temperature=0, num_ctx=self._num_ctx)
+        return self._chat
+
+    def extract(self, prompt: str, schema: type[BaseModel], *, system: str | None = None) -> BaseModel:
+        """Return a schema instance, discovering + pinning the working method.
+
+        Raises:
+            ValueError: if every candidate method fails to produce valid output.
+        """
+        messages = ([("system", system)] if system else []) + [("human", prompt)]
+        chat, last = self._chat_model(), None
+        for method in ((self._method,) if self._method else self._METHODS):
+            try:
+                runnable = chat.with_structured_output(schema, method=method, include_raw=True)
+                result = runnable.invoke(messages)
+                if result.get("parsed") is not None and not result.get("parsing_error"):
+                    self._method = method        # pin what worked
+                    return result["parsed"]
+                last = result.get("parsing_error")
+            except Exception as exc:             # method unsupported / hard failure -> try next
+                last = exc
+        raise ValueError(f"extraction failed for {self.model}: {last}")
 ```
 
 - [ ] **Step 4: Run to verify pass**

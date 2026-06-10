@@ -39,7 +39,10 @@ def segment(elements: list[Element], profile: Profile, chapter: str) -> tuple[li
     any in-progress prose run; a level-2 heading whose text matches
     ``profile.section_re`` starts a new section (the first captured group is the
     section id), while a level-1 heading flushes prose but keeps the current
-    section. A contiguous run of ``para`` Elements within a section becomes one
+    section — except a level-1 (chapter) title seen *after* body content has
+    begun, which marks the next chapter and stops segmentation (so a
+    single-chapter call excludes the following chapter). A contiguous run of
+    ``para`` Elements within a section becomes one
     prose unit; each ``code`` Element is its own unit; ``figure`` Elements are
     skipped. Until the first level-2 heading, the section is ``chapter``.
 
@@ -61,6 +64,7 @@ def segment(elements: list[Element], profile: Profile, chapter: str) -> tuple[li
     cur_section = chapter
     prose: list[str] = []
     prose_page = 0
+    started = False  # True once body content (a section, paragraph, or code) has begun
 
     def flush_prose() -> None:
         """Emit any buffered prose lines as one joined prose RawUnit."""
@@ -73,14 +77,21 @@ def segment(elements: list[Element], profile: Profile, chapter: str) -> tuple[li
         if el.kind == "figure":
             continue
         if el.kind == "heading":
+            # A level-1 (chapter) title after body content has begun marks the
+            # next chapter; a single-chapter segment stops there.
+            if el.level == 1 and started:
+                flush_prose()
+                break
             flush_prose()
             if el.level == 2:
+                started = True
                 m = section_re.match(el.text.strip())
                 if m:
                     cur_section = m.group(1)
             section_texts.setdefault(cur_section, [])
             continue
         section_texts.setdefault(cur_section, []).append(el.text)
+        started = True
         if el.kind == "code":
             flush_prose()
             units.append(RawUnit(el.text, chapter, cur_section, el.page, True))

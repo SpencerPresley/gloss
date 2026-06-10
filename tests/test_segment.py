@@ -58,3 +58,23 @@ def test_figure_between_paragraphs_does_not_split_prose():
     prose = [u for u in units if not u.is_code]
     assert len(prose) == 1
     assert "before the figure" in prose[0].text and "after the figure" in prose[0].text
+
+
+def test_segment_stops_at_next_chapter_title():
+    """A level-1 chapter title after body content marks the next chapter — stop there."""
+    els = [
+        Element("heading", "Chapter 6", 50, 1),
+        Element("heading", "General-Purpose Modules are Deeper", 50, 1),
+        Element("para", "Chapter 6 intro prose.", 50),
+        Element("heading", "6.1 Make classes somewhat general-purpose", 50, 2),
+        Element("para", "Section 6.1 body.", 50),
+        Element("heading", "Chapter 7", 56, 1),
+        Element("heading", "Different Layer, Different Abstraction", 56, 1),
+        Element("para", "Chapter 7 intro must be excluded.", 56),
+        Element("heading", "7.1 Pass-through methods", 57, 2),
+        Element("para", "Section 7.1 body must be excluded.", 57),
+    ]
+    units, section_texts = segment(els, _profile(), chapter="6")
+    assert sorted({u.section for u in units}) == ["6", "6.1"]   # nothing from chapter 7
+    assert "7.1" not in section_texts
+    assert all("excluded" not in u.text for u in units)

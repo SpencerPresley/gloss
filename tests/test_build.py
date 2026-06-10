@@ -13,7 +13,8 @@ def test_load_prompt_splits_on_marker():
 
 def test_load_profile_has_aposd_values():
     p = load_profile(_INSTANCE)
-    assert p.code_font == "Typewriter" and p.chapter_pages["6"] == (50, 58)
+    assert p.code_font == "Typewriter" and p.chapter_re == r"^Chapter\s+(\d+)"
+    assert p.chapter_pages == {}                 # detection, not hardcoded ranges
     assert p.corpus_path.name.endswith(".pdf")
 
 

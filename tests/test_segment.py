@@ -15,7 +15,7 @@ from gloss.segment import segment, RawUnit
 def _profile() -> Profile:
     return Profile(corpus_path=Path("x"), code_font="Typewriter", head_font="NimbusSanL-Bol",
                    chapter_size=20.0, section_size=16.0, figure_min_area=5000,
-                   section_re=r"^(\d+\.\d+)", chapter_pages={})
+                   section_re=r"^(\d+\.\d+)", chapter_re=r"^Chapter\s+(\d+)", chapter_pages={})
 
 
 def test_segment_splits_prose_and_code():
@@ -78,3 +78,49 @@ def test_segment_stops_at_next_chapter_title():
     assert sorted({u.section for u in units}) == ["6", "6.1"]   # nothing from chapter 7
     assert "7.1" not in section_texts
     assert all("excluded" not in u.text for u in units)
+
+
+def test_split_chapters_groups_by_marker():
+    from gloss.parse import Element
+    from gloss.segment import split_chapters
+    els = [
+        Element("heading", "Preface", 9, 1),            # front matter -> dropped
+        Element("para", "preface body", 9),
+        Element("heading", "Chapter 1", 13, 1),
+        Element("heading", "Introduction", 13, 1),      # title line, not a boundary
+        Element("para", "intro body", 13),
+        Element("heading", "1.1 Something", 14, 2),
+        Element("para", "more intro", 14),
+        Element("heading", "Chapter 2", 18, 1),
+        Element("heading", "The Nature of Complexity", 18, 1),
+        Element("para", "ch2 body", 18),
+        Element("heading", "Index", 178, 1),            # back matter -> stays in last span
+    ]
+    chapters = split_chapters(els, _profile())
+    assert [cid for cid, _ in chapters] == ["1", "2"]
+    by_id = dict(chapters)
+    assert any(e.text == "intro body" for e in by_id["1"])
+    assert any(e.text == "1.1 Something" for e in by_id["1"])
+    assert all(e.text != "preface body" for e in by_id["1"])     # front matter excluded
+    assert any(e.text == "ch2 body" for e in by_id["2"])
+
+
+def test_split_chapters_empty_without_marker():
+    from gloss.parse import Element
+    from gloss.profile import Profile
+    from gloss.segment import split_chapters
+    no_re = Profile(corpus_path=Path("x"), code_font="Typewriter", head_font="NimbusSanL-Bol",
+                    chapter_size=20.0, section_size=16.0, figure_min_area=5000,
+                    section_re=r"^(\d+\.\d+)")  # chapter_re defaults to ""
+    els = [Element("heading", "Chapter 1", 1, 1), Element("para", "body", 1)]
+    assert split_chapters(els, no_re) == []
+
+
+def test_split_chapters_real_pdf_finds_all_21(corpus_path):
+    from gloss.build import load_profile
+    from gloss.parse import parse_pdf
+    from gloss.segment import split_chapters
+    profile = load_profile(Path("corpora/aposd"))
+    els = parse_pdf(corpus_path, None, None, profile)
+    chapters = split_chapters(els, profile)
+    assert [cid for cid, _ in chapters] == [str(n) for n in range(1, 22)]

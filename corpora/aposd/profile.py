@@ -12,5 +12,5 @@ APOSD = Profile(
     section_size=16.0,
     figure_min_area=5000,
     section_re=r"^(\d+\.\d+)",
-    chapter_pages={"6": (50, 58)},
+    chapter_re=r"^Chapter\s+(\d+)",
 )

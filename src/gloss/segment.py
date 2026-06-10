@@ -12,6 +12,39 @@ from .parse import Element
 from .profile import Profile
 
 
+def split_chapters(elements: list[Element], profile: Profile) -> list[tuple[str, list[Element]]]:
+    """Slice parsed Elements into per-chapter spans by chapter-marker headings.
+
+    A level-1 heading whose text matches ``profile.chapter_re`` starts a new chapter;
+    the regex's first group is the chapter id. Elements before the first marker (front
+    matter) are dropped. Each chapter's span runs to the next marker — or to the end of
+    the document for the last one, where trailing back matter (e.g. an "Index" heading)
+    is left for the segment stage to trim via its stop-at-next-level-1 rule.
+
+    Args:
+        elements: Parsed structural Elements in reading order (whole document).
+        profile: Carries ``chapter_re``; an empty ``chapter_re`` disables detection.
+
+    Returns:
+        ``[(chapter_id, [Element, ...]), ...]`` in document order, or ``[]`` when
+        ``chapter_re`` is empty or no marker matches.
+    """
+    if not profile.chapter_re:
+        return []
+    marker = re.compile(profile.chapter_re)
+    starts: list[tuple[str, int]] = []  # (chapter_id, element index)
+    for i, el in enumerate(elements):
+        if el.kind == "heading" and el.level == 1:
+            m = marker.match(el.text.strip())
+            if m:
+                starts.append((m.group(1), i))
+    spans: list[tuple[str, list[Element]]] = []
+    for n, (cid, start) in enumerate(starts):
+        end = starts[n + 1][1] if n + 1 < len(starts) else len(elements)
+        spans.append((cid, elements[start:end]))
+    return spans
+
+
 @dataclass
 class RawUnit:
     """One retrieval unit's verbatim text + provenance, before LLM enrichment.

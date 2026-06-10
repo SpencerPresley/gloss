@@ -6,6 +6,9 @@ interrupted run resumes from the last completed unit.
 from __future__ import annotations
 import hashlib
 import json
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Literal
 
@@ -50,35 +53,68 @@ def _done_keys(checkpoint: Path) -> set[str]:
     return {json.loads(line)["key"] for line in checkpoint.read_text().splitlines() if line.strip()}
 
 
-def enrich_units(units, section_texts, extractor: StructuredExtractor, *,
-                 card: str, template: str, system: str, checkpoint: Path) -> list[dict]:
-    """Enrich each unit (skipping any already checkpointed) and return all rows.
+def _enrich_one(unit: RawUnit, section_texts, extractor: StructuredExtractor, *,
+                card: str, template: str, system: str, model: str, retries: int = 2) -> dict:
+    """Enrich one unit into a checkpoint row, retrying transient extractor errors.
 
-    Each unit is appended to the JSONL checkpoint as it completes, so an interrupted
-    run resumes. Code units are forced to type='code'; a unit whose extraction fails
-    keeps its verbatim text with empty generated fields and needs_enrich=1.
+    On persistent failure the unit keeps its verbatim text with empty generated fields and
+    needs_enrich=1. Code units are forced to type='code'.
+    """
+    prompt = build_prompt(unit, section_texts.get(unit.section, ""), card, template)
+    fields, needs = None, 0
+    for attempt in range(retries + 1):
+        try:
+            fields = extractor.extract(prompt, Enrichment, system=system).model_dump()
+            needs = 0
+            break
+        except Exception:
+            if attempt < retries:
+                time.sleep(2 ** attempt)
+                continue
+            fields = {"principle": "", "type": "code" if unit.is_code else "rationale",
+                      "context_line": "", "applies_when": "", "key_terms": [], "questions": []}
+            needs = 1
+    if unit.is_code:
+        fields["type"] = "code"
+    return {"key": _key(unit), "text": unit.text, "chapter": unit.chapter,
+            "section": unit.section, "page": unit.page, "enrich_model": model,
+            "needs_enrich": needs, **fields}
+
+
+def enrich_units(units, section_texts, extractor: StructuredExtractor, *,
+                 card: str, template: str, system: str, checkpoint: Path,
+                 max_workers: int = 1) -> list[dict]:
+    """Enrich each not-yet-checkpointed unit and return all rows.
+
+    Serial when ``max_workers <= 1``. Otherwise the first pending unit is enriched serially
+    (pinning the extractor's method and warming its client) before the rest run on a thread
+    pool; checkpoint writes are serialized by a lock. Rows are appended as they complete, so
+    an interrupted run resumes by key.
     """
     checkpoint = Path(checkpoint)
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
     model = getattr(extractor, "model", "stub")
     done = _done_keys(checkpoint)
+    pending = [u for u in units if _key(u) not in done]
+    lock = threading.Lock()
+
+    def work(unit: RawUnit) -> dict:
+        return _enrich_one(unit, section_texts, extractor, card=card, template=template,
+                           system=system, model=model)
+
     with checkpoint.open("a") as handle:
-        for unit in units:
-            key = _key(unit)
-            if key in done:
-                continue
-            prompt = build_prompt(unit, section_texts.get(unit.section, ""), card, template)
-            try:
-                fields = extractor.extract(prompt, Enrichment, system=system).model_dump()
-                needs = 0
-            except Exception:
-                fields = {"principle": "", "type": "code" if unit.is_code else "rationale",
-                          "context_line": "", "applies_when": "", "key_terms": [], "questions": []}
-                needs = 1
-            if unit.is_code:
-                fields["type"] = "code"
-            row = {"key": key, "text": unit.text, "chapter": unit.chapter, "section": unit.section,
-                   "page": unit.page, "enrich_model": model, "needs_enrich": needs, **fields}
-            handle.write(json.dumps(row) + "\n")
-            done.add(key)
+        def write(row: dict) -> None:
+            with lock:
+                handle.write(json.dumps(row) + "\n")
+                handle.flush()
+
+        if max_workers > 1 and pending:
+            write(work(pending[0]))                       # warmup: pin method serially
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                for row in pool.map(work, pending[1:]):
+                    write(row)
+        else:
+            for unit in pending:
+                write(work(unit))
+
     return [json.loads(line) for line in checkpoint.read_text().splitlines() if line.strip()]

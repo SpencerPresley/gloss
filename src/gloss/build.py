@@ -45,7 +45,7 @@ def estimate_num_ctx(prompts: list[str], system: str,
 
 
 def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE,
-              extractor=None, build_dir: Path = Path("build")):
+              extractor=None, build_dir: Path = Path("build"), workers: int = 1):
     """Build the corpus db: one chapter (``chapter`` set) or the whole book (``chapter`` None).
 
     Chapters are detected via ``profile.chapter_re`` (or taken from ``profile.chapter_pages``
@@ -61,6 +61,7 @@ def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE,
         extractor: Optional pre-built StructuredExtractor (tests inject a stub); when None,
             one ``OllamaExtractor`` is built and reused across all chapters.
         build_dir: Root for per-chapter JSONL checkpoints.
+        workers: Concurrent enrichment requests per chapter (1 = serial).
 
     Returns:
         All enrichment rows across every built chapter.
@@ -108,7 +109,7 @@ def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE,
         if not resume and checkpoint.exists():
             checkpoint.unlink()
         rows = enrich_units(units, section_texts, extractor, card=card, template=template,
-                            system=system, checkpoint=checkpoint)
+                            system=system, checkpoint=checkpoint, max_workers=workers)
         failed = sum(r["needs_enrich"] for r in rows)
         print(f"  ch{cid}: {len(rows)} units ({failed} failed) principle={principle or 'null'}")
         all_rows += rows

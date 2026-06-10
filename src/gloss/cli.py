@@ -29,7 +29,8 @@ def cmd_retrieve(args) -> None:
 def cmd_build(args) -> None:
     """Build the corpus db (lazy import: build-only deps stay off the retrieve path)."""
     from .build import run_build
-    run_build(chapter=args.chapter, model=args.model, db=Path(args.db), resume=args.resume)
+    run_build(chapter=args.chapter, model=args.model, db=Path(args.db),
+              resume=args.resume, workers=args.workers)
 
 
 def cmd_eval(args) -> None:
@@ -57,6 +58,7 @@ def main(argv: list[str] | None = None) -> None:
     b.add_argument("--model", default="minimax-m3:cloud")
     b.add_argument("--db", default="aposd.db")
     b.add_argument("--resume", action="store_true")
+    b.add_argument("--workers", type=int, default=1, help="concurrent enrichment requests")
     b.set_defaults(func=cmd_build)
 
     e = sub.add_parser("eval", help="score retrieval against eval cases")

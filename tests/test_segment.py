@@ -124,3 +124,19 @@ def test_split_chapters_real_pdf_finds_all_21(corpus_path):
     els = parse_pdf(corpus_path, None, None, profile)
     chapters = split_chapters(els, profile)
     assert [cid for cid, _ in chapters] == [str(n) for n in range(1, 22)]
+
+
+def test_last_chapter_span_excludes_back_matter(corpus_path):
+    # ch21's span runs to end-of-document, but segment must trim trailing back matter
+    # (Index p178+, summaries p185-187, About p188). Pins the otherwise-unenforced
+    # invariant that the post-chapter divider is detected and stops segmentation.
+    from gloss.build import load_profile
+    from gloss.parse import parse_pdf
+    from gloss.segment import segment, split_chapters
+    profile = load_profile(Path("corpora/aposd"))
+    els = parse_pdf(corpus_path, None, None, profile)
+    chapters = dict(split_chapters(els, profile))
+    units, _ = segment(chapters["21"], profile, "21")
+    assert units, "ch21 should yield at least the Conclusion content"
+    assert all(u.page < 178 for u in units), \
+        f"back matter leaked into ch21: pages {sorted({u.page for u in units})}"

@@ -94,9 +94,19 @@ The generated fields exist to boost **lexical** recall (we're BM25-first, not em
 They are indexed in **separate FTS5 columns** so they raise recall without diluting the
 verbatim text's ranking.
 
-**Controlled vocabulary** (so metadata filters actually work): `principle` is a closed set
-mapped to the skill's six principles; `chapter`/`section` carry the book's finer structure.
-The exact taxonomy is finalized during the Ch.6 build against real content.
+**Two-facet controlled vocabulary** (so metadata filters work *and* nothing in the book is lost):
+- `principle` — **coarse facet, the skill's 6 principles.** What the skill filters on
+  (`--principle deep-modules`) and the vocabulary the index aligns to — the tie-back to the skill.
+- `topic` / `chapter` / `section` — **fine facet, the book's actual structure** (~21 chapters).
+  The book covers far more than the skill distills (*Pull Complexity Downward*, *Different Layer
+  Different Abstraction*, *Define Errors Out of Existence*, *Choosing Names*, *Consistency*,
+  *Code Should be Obvious*, *Designing for Performance*, …); the fine facet keeps those. The
+  retriever should be able to *extend* the skill, not just mirror it.
+
+The coarse facet + the skill's query vocabulary come from a one-time **skill-distillation card**
+(§6); the fine facet comes from the book's parsed structure. A **reconciliation** step diffs the
+two and flags book topics the skill omits, so fold-into-a-principle vs. add-as-fine-`topic` is a
+conscious decision (the plan's first task).
 
 ### SQLite / FTS5 schema (validated in research prototype)
 
@@ -131,6 +141,13 @@ CREATE VIRTUAL TABLE units_fts USING fts5(
 
 ## 6. Build pipeline
 
+A one-time **skill-distillation** precedes the per-book pipeline: reduce `SKILL.md` + references
+to a compact `skill_taxonomy` card (~1–2k tokens — the 6 principle slugs + one-line defs + each
+principle's characteristic vocabulary, Quick-Diagnostic questions, red-flag phrasings). It defines
+the coarse `principle` vocabulary and the *query vocabulary* the index aligns to. A reconciliation
+pass diffs it against the book's parsed chapter/section structure and lists topics the skill omits
+→ fold-vs-add decided explicitly (the plan's first task). Then, per book:
+
 1. **Parse** — PyMuPDF `page.get_text("dict")`, font-aware. `"Typewriter" in span_font`
    (substring — fonts are subset-prefixed like `AAAAAE+LucidaSans-Typewriter`) → code:
    standalone line → fenced block, inline span → backtick. `NimbusSanL-Bol` + size
@@ -140,10 +157,12 @@ CREATE VIRTUAL TABLE units_fts USING fts5(
    `text` is fixed here.** Code blocks become their own `type='code'` units linked to the
    prose unit they illustrate.
 3. **Enrich** — per unit, one structured-output LLM call **with the unit's full section as
-   situating context**. Classifies prose `type`/`principle`; generates `context_line`,
-   `questions_this_answers`, `key_terms`, `applies_when`. `temperature=0`, "use only
-   information present in the provided text; if unknown, omit" to curb hallucination. Each
-   completed unit is checkpointed (JSONL) immediately.
+   situating context** plus the compact `skill_taxonomy` card. Classifies `type` and the coarse
+   `principle` (into the card's slugs); generates `context_line`, `questions_this_answers`,
+   `key_terms`, `applies_when`, biased toward the skill's query vocabulary. **Strict separation:**
+   substantive content comes *only* from the passage (`temperature=0`, "use only information
+   present in the provided text; if unknown, omit"); the card supplies *which principle bucket and
+   preferred phrasing*, never facts. Each completed unit is checkpointed (JSONL) immediately.
 4. **Load** — assemble `aposd.db` (units + FTS5 + triggers + optimize).
 
 ### Model strategy (`(model, method)`-configurable, eval-driven)
@@ -206,6 +225,8 @@ into atlascyber" = copy `aposd.db` + one script, zero `pip install`. Build-time 
 ## 8. Eval harness
 
 - `eval/cases.yaml`: design situations → expected principle / section / unit.
+- **Seed cases from the skill** — its Quick-Diagnostic questions and Common-Mistakes are a
+  ready-made bank of the real queries the skill will issue; reuse them as eval cases.
 - `aposd eval` reports **top-k hit-rate / MRR**.
 - Run after every build. This is how we (a) answer "is minimax worth it over gpt-oss" with
   numbers, (b) tune BM25 column weights and tokenizer, and (c) catch bad extraction quality
@@ -254,6 +275,12 @@ into atlascyber" = copy `aposd.db` + one script, zero `pip install`. Build-time 
   ```
 - **git:** local repo, no remote yet. `.env` gitignored (no secrets expected; Ollama cloud
   auth is `ollama signin`). PDFs gitignored (large + copyrighted).
+- **Distribution:** the db is **built once, never at deploy.** SQLite + FTS5 ship in the Python
+  stdlib and a `.db` is byte-portable across OS / CPU arch / SQLite versions, so deploying = copy
+  the file. For packaging, bundle the prebuilt `aposd.db` as **package data** (read via
+  `importlib.resources`) with build deps behind an optional `[build]` extra → `uvx aposd retrieve
+  "…"` runs with zero setup, index baked in. (FTS5 is in ~all CPython SQLite builds; if ever
+  absent, a pure-Python BM25 over the same `units` table is a drop-in fallback — FTS5 is only an index.)
 
 ## 12. Skill integration (designed-for, deferred)
 
@@ -310,5 +337,7 @@ skills/subagents, and is portable into atlascyber (any agent shells out).
   is insufficient.
 - **`trigram` secondary index** for partial-identifier matching — add if code-identifier
   queries underperform.
-- **Full-book taxonomy** — finalize the controlled `principle`/`type` vocabulary on Ch.6.
+- **Taxonomy reconciliation** (the plan's first task) — diff the skill card vs. the book's parsed
+  structure to lock the two-facet (`principle` coarse / `topic` fine) vocabulary and decide
+  fold-vs-add for the book topics the skill omits.
 - **Whether to commit the built `aposd.db`** as a shippable deliverable vs. always rebuild.

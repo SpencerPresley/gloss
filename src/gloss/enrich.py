@@ -33,8 +33,13 @@ def build_prompt(unit: RawUnit, section_text: str, card: str, template: str) -> 
 
 
 def _key(unit: RawUnit) -> str:
-    """Stable per-unit checkpoint key (section + kind + text prefix)."""
-    raw = f"{unit.section}|{unit.is_code}|{unit.text[:64]}"
+    """Stable per-unit checkpoint key (section + kind + full verbatim text).
+
+    Hashing the full text (not a prefix) avoids silently dropping a unit that
+    shares a long prefix with another in the same section — truncation saves
+    nothing before a SHA1.
+    """
+    raw = f"{unit.section}|{unit.is_code}|{unit.text}"
     return hashlib.sha1(raw.encode()).hexdigest()[:12]
 
 

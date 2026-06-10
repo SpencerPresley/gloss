@@ -1,0 +1,227 @@
+# Two-facet controlled vocabulary for the APOSD corpus.
+#
+#   principle  COARSE facet, closed set = the software-design-philosophy skill's 6 principles.
+#              This is what callers filter on; the index aligns to this vocabulary.
+#   topic      FINE facet = the book's actual chapter structure (21 chapters).
+#              Every chapter maps to exactly one coarse principle or `null`.
+#
+# Sources:
+#   - .claude/skills/software-design-philosophy/SKILL.md  (+ references/*.md)
+#   - resources/2018-john-ousterhout-a-philosophy-of-software-design_compress.pdf
+#     (chapter/section headings; "Summary of Design Principles" p.185; "Summary of Red Flags" p.186-187)
+#
+# All vocabulary / diagnostics / red_flags are derived verbatim or near-verbatim from the
+# skill text. Chapter titles are derived verbatim from the book's TOC scan.
+
+principles: # COARSE facet -- the 6 fixed slugs
+
+  - slug: complexity
+    name: "Complexity and Its Causes"
+    vocabulary:
+      - "complexity"
+      - "change amplification"
+      - "cognitive load"
+      - "unknown unknowns"
+      - "dependencies"
+      - "obscurity"
+      - "complexity is incremental"
+      - "death by a thousand cuts"
+      - "C = sum(cp * tp)"
+      - "syntactic dependency"
+      - "semantic dependency"
+      - "temporal dependency"
+      - "hidden dependency"
+      - "broken windows"
+      - "zero-tolerance policy for complexity"
+      - "simplest interface test"
+    diagnostics:
+      - "If I need to make this change, how many files do I need to touch? (more than 2-3 for a simple change = change amplification)"
+      - "How much does a developer need to know to use this module correctly?"
+      - "Can a new developer make changes to this module confidently without talking to someone? (if no = unknown unknowns)"
+      - "Does this increase or decrease the overall complexity of the system?"
+      - "What is the simplest interface that would meet all the current use cases?"
+      - "Can you explain what module X does in one sentence?"
+    red_flags:
+      - "change amplification (a simple change requires modifications in many places)"
+      - "high cognitive load (developer must hold too much in mind)"
+      - "unknown unknowns (not obvious what must change or what info is relevant)"
+      - "unnecessary or hidden dependencies"
+      - "obscurity (important information not obvious from code or docs)"
+      - "generic variable names: data, temp, result, info, manager"
+      - "magic numbers without explanation"
+      - "implicit conventions that are never stated"
+
+  - slug: deep-modules
+    name: "Deep vs Shallow Modules"
+    vocabulary:
+      - "deep module"
+      - "shallow module"
+      - "interface is the cost, implementation is the benefit"
+      - "module depth = functionality provided / interface complexity imposed"
+      - "classitis"
+      - "narrow interface, deep implementation"
+      - "Unix file I/O"
+      - "garbage collector"
+      - "Java I/O wrapper classes"
+      - "thin wrapper"
+      - "absorb complexity"
+      - "tall narrow rectangle"
+    diagnostics:
+      - "Are interfaces simpler than implementations?"
+      - "Does this class hide significant complexity behind its interface?"
+      - "Can you describe the module in one sentence?"
+      - "Does the module hide a non-trivial decision?"
+      - "Would removing it require callers to duplicate a lot of code?"
+      - "How many methods in the interface? How many parameters per method?"
+    red_flags:
+      - "shallow module (interface not much simpler than implementation)"
+      - "classitis (too many small, shallow classes)"
+      - "thin wrapper classes that just pass through"
+      - "class names ending in -Helper, -Util, -Manager, -Handler with 1-2 methods"
+      - "understanding a feature requires reading 8+ classes"
+      - "creating classes just to make them independently testable"
+
+  - slug: information-hiding
+    name: "Information Hiding and Leakage"
+    vocabulary:
+      - "information hiding"
+      - "information leakage"
+      - "encapsulate a design decision in a single module"
+      - "temporal decomposition"
+      - "back-door leakage"
+      - "interface leakage"
+      - "decorator leakage"
+      - "organize by knowledge, not by time"
+      - "merge modules that share knowledge"
+      - "design interfaces around abstractions, not implementations"
+      - "Parnas"
+      - "different layer, different abstraction"   # ch.7 folds here (loose; see gap list)
+      - "pass-through variable"
+    diagnostics:
+      - "Can you change a module's implementation without affecting callers?"
+      - "Does each module hide at least one important design decision?"
+      - "What design decisions does this module hide?"
+      - "Does the interface mention implementation-specific concepts? (should be no)"
+      - "If this module's internal format changes, how many other modules must change? (should be zero)"
+      - "Do tests verify behavior or implementation?"
+    red_flags:
+      - "information leakage (same knowledge in multiple modules)"
+      - "temporal decomposition (modules split by time rather than knowledge)"
+      - "back-door leakage through shared data formats, protocols, or assumptions"
+      - "two modules that always change together"
+      - "a data format or protocol mentioned in multiple files"
+      - "decorators that duplicate the wrapped interface"
+      - "comments like 'must match format in module X'"
+
+  - slug: general-purpose
+    name: "General-Purpose vs Special-Purpose Modules"
+    vocabulary:
+      - "somewhat general-purpose"
+      - "general-purpose modules are deeper"
+      - "push complexity down"                     # ch.8 folds here (loose; see gap list)
+      - "pull complexity downward"
+      - "configuration parameters as complexity amplifiers"
+      - "sensible defaults"
+      - "auto-detection"
+      - "progressive disclosure"
+      - "convention over configuration"
+      - "separate general-purpose and special-purpose code"  # ch.9 partial
+      - "special-purpose interface"
+      - "over-generalization"
+    diagnostics:
+      - "What is the simplest interface that will cover all my current needs?"
+      - "Can the module figure this configuration value out on its own? (if yes, remove the parameter)"
+      - "Do most callers use the same value? (if yes, make it the default)"
+      - "Will the caller know the right value? (if no, the parameter shifts complexity)"
+      - "Can an existing method handle this with its current interface, or with a slight generalization?"
+    red_flags:
+      - "use-case-specific methods (storeUser, storeProduct, storeOrder)"
+      - "methods named after specific callers"
+      - "long parameter lists (complexity pushed upward)"
+      - "configuration parameters that nobody touches"
+      - "special-general mixture (general module with special-case code for specific callers)"
+      - "designing for hypothetical future use cases"
+
+  - slug: comments
+    name: "Comments as Design Documentation"
+    vocabulary:
+      - "comments describe what is not obvious from the code"
+      - "interface comment"
+      - "data structure member comment"
+      - "implementation comment"
+      - "cross-module comment"
+      - "comment-driven design"
+      - "write the comments first"
+      - "self-documenting code myth"
+      - "what and why, not how"
+      - "delayed comments are bad comments"
+      - "comments are a design tool"
+    diagnostics:
+      - "Do interface comments describe the abstraction, not the code?"
+      - "Can a new team member understand module boundaries without reading implementations?"
+      - "Do implementation comments explain why, not what?"
+      - "Are cross-module comments present where needed?"
+      - "Is the comment hard to write? (if so, the design may be too complex)"
+    red_flags:
+      - "comment repeats the code (no added information)"
+      - "comment describes what, not why"
+      - "implementation documentation contaminates interface (interface comment describes internal details)"
+      - "TODO without context"
+      - "commented-out (dead) code"
+      - "banner comments"
+      - "apology comments ('sorry, this is a hack')"
+      - "stale comments describing behavior that no longer exists"
+
+  - slug: strategic-programming
+    name: "Strategic vs Tactical Programming"
+    vocabulary:
+      - "strategic programming"
+      - "tactical programming"
+      - "tactical tornado"
+      - "10-20% investment"
+      - "investment mindset"
+      - "great design that also happens to work"
+      - "leave the code better than you found it (Boy Scout rule with teeth)"
+      - "technical debt"
+      - "move fast and break things (Facebook)"
+      - "Google design culture / readability reviews"
+      - "refactoring is part of every feature"
+      - "design reviews"
+    diagnostics:
+      - "Is design discussion part of code reviews?"
+      - "Are you spending 10-20% of time on design improvement?"
+      - "Does this change make the system simpler or more complex?"
+      - "Did this PR improve at least one abstraction or eliminate one piece of complexity?"
+      - "If you took a tactical shortcut, did you acknowledge the debt and schedule the repayment?"
+    red_flags:
+      - "quick-and-dirty tactical fixes ('just this one special case')"
+      - "tactical tornado (ships fast, leaves wreckage)"
+      - "adding a boolean parameter to handle one special case"
+      - "'we'll fix it later' / 'I'll clean this up next sprint'"
+      - "code reviews that only catch bugs, not complexity growth"
+      - "startups deferring design until after product-market fit"
+
+topics: # FINE facet -- every book chapter mapped to a coarse principle (or null)
+  # `principle: null` = no clean coarse home; see the GAP LIST in
+  # docs/superpowers/notes/2026-06-10-taxonomy-reconciliation.md
+  - {chapter: 1,  title: "Introduction (It's All About Complexity)",                      principle: complexity}
+  - {chapter: 2,  title: "The Nature of Complexity",                                       principle: complexity}
+  - {chapter: 3,  title: "Working Code Isn't Enough (Strategic vs. Tactical Programming)", principle: strategic-programming}
+  - {chapter: 4,  title: "Modules Should Be Deep",                                         principle: deep-modules}
+  - {chapter: 5,  title: "Information Hiding (and Leakage)",                                principle: information-hiding}
+  - {chapter: 6,  title: "General-Purpose Modules are Deeper",                             principle: general-purpose}
+  - {chapter: 7,  title: "Different Layer, Different Abstraction",                          principle: information-hiding} # loose fit -- GAP
+  - {chapter: 8,  title: "Pull Complexity Downwards",                                       principle: general-purpose}    # loose fit -- GAP
+  - {chapter: 9,  title: "Better Together Or Better Apart?",                                principle: deep-modules}       # loose fit -- GAP
+  - {chapter: 10, title: "Define Errors Out Of Existence",                                  principle: null}               # GAP
+  - {chapter: 11, title: "Design it Twice",                                                 principle: null}               # GAP
+  - {chapter: 12, title: "Why Write Comments? The Four Excuses",                            principle: comments}
+  - {chapter: 13, title: "Comments Should Describe Things that Aren't Obvious from the Code", principle: comments}
+  - {chapter: 14, title: "Choosing Names",                                                  principle: null}               # GAP
+  - {chapter: 15, title: "Write The Comments First (Use Comments As Part Of The Design Process)", principle: comments}
+  - {chapter: 16, title: "Modifying Existing Code",                                         principle: strategic-programming}
+  - {chapter: 17, title: "Consistency",                                                     principle: null}               # GAP
+  - {chapter: 18, title: "Code Should be Obvious",                                          principle: null}               # GAP (loose tie to complexity/obscurity)
+  - {chapter: 19, title: "Software Trends",                                                 principle: null}               # GAP
+  - {chapter: 20, title: "Designing for Performance",                                       principle: null}               # GAP
+  - {chapter: 21, title: "Conclusion",                                                      principle: null}               # back matter

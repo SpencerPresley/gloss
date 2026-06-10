@@ -191,6 +191,29 @@ pass diffs it against the book's parsed chapter/section structure and lists topi
   mid-run downgrade. (Removing the fallback also removes a murky auto-policy — APOSD §4: a
   config knob that papers over an undecided behavior. We decided: one model, checkpoint-and-wait.)
 
+### Extraction interface (decoupled from Ollama)
+
+The pipeline never imports LangChain or Ollama. It depends on a one-method seam:
+
+```python
+class StructuredExtractor(Protocol):
+    def extract(self, prompt: str, schema: type[BaseModel]) -> BaseModel: ...
+```
+
+Exactly **one** adapter is built now — `OllamaExtractor` — which owns *all* provider-specific
+knowledge: model loading, the `json_schema`-vs-`function_calling` method branch, `num_ctx`,
+retries, validation. The enrichment pipeline calls `extractor.extract(...)` and knows nothing
+about models. Near-zero cost (the adapter is code we write anyway), three payoffs:
+- **Testability now:** unit-test the whole enrichment pipeline against a deterministic *stub*
+  extractor — no model calls.
+- **No bet on `with_structured_output`:** our interface promises structured extraction; *how* an
+  adapter delivers it is its own business, so a future provider lacking LangChain's
+  `with_structured_output` is a different adapter, not a refactor.
+- **Swap/add a provider later = one new adapter file**, zero pipeline change.
+
+APOSD §6 applied to ourselves: a somewhat-general interface over a special-purpose (Ollama)
+implementation — we build one adapter, not a provider zoo (YAGNI).
+
 ## 7. Query CLI (`aposd`)
 
 - `aposd retrieve "<situation>" [--principle P …] [--type T …] [-k N] [--json]`
@@ -265,7 +288,8 @@ into atlascyber" = copy `aposd.db` + one script, zero `pip install`. Build-time 
     src/aposd/
       parse.py              # PyMuPDF font-aware extraction
       segment.py            # deterministic unit boundaries
-      enrich.py             # LLM structured-output pass (model/method branching, checkpointed)
+      extract.py            # StructuredExtractor Protocol + OllamaExtractor adapter (provider-specific)
+      enrich.py             # enrichment pipeline (uses StructuredExtractor; checkpointed)
       store.py              # SQLite/FTS5 build + the query (stdlib only)
       cli.py                # argparse; retrieve / build / eval
     eval/cases.yaml
@@ -301,6 +325,10 @@ skills/subagents, and is portable into atlascyber (any agent shells out).
    by model. **One model per build — no automatic fallback;** a quota cap → checkpoint + wait +
    `--resume` (uniform quality over convenience). Local `gpt-oss:20b` is an explicit dev/iteration model.
 7. **Store:** SQLite FTS5, single portable file, stdlib-only at query time.
+8. **Extraction interface:** build depends on a one-method `StructuredExtractor` seam; one
+   `OllamaExtractor` adapter now (provider/method knowledge hidden inside). Cheap decoupling from
+   Ollama/LangChain, enables stub-based pipeline tests, no bet on `with_structured_output` being universal.
+9. **Distribution:** deferred to a future session (documented in §11, not built now).
 
 ## 14. Research findings & sources (grounding)
 

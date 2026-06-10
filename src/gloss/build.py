@@ -67,7 +67,11 @@ def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE):
     extractor = OllamaExtractor(model, num_ctx=num_ctx)
     rows = enrich_units(units, section_texts, extractor, card=card, template=template,
                         system=system, checkpoint=checkpoint)
+    failed = sum(r["needs_enrich"] for r in rows)
+    if failed:
+        print(f"WARNING: {failed}/{len(rows)} units failed enrichment (empty generated "
+              f"fields) — does model {model!r} support structured output?")
     from .store import build_db
     build_db(rows, Path(db))
-    print(f"built {len(rows)} units -> {db}")
+    print(f"built {len(rows)} units ({failed} enrichment failures) -> {db}")
     return rows

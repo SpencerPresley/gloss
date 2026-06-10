@@ -61,6 +61,24 @@ def test_run_build_single_chapter_still_works(tmp_path, corpus_path):
     assert len(rows) >= 15
 
 
+def test_run_build_indexes_summary_appendices(tmp_path, corpus_path):
+    import sqlite3
+    from gloss.build import run_build
+    from gloss.extract import StubExtractor
+    stub = StubExtractor({"principle": "general-purpose", "type": "red_flag",
+                          "context_line": "c", "applies_when": "a",
+                          "key_terms": ["k"], "questions": ["q?"]})
+    db = tmp_path / "aposd.db"
+    run_build(chapter=None, model="stub", db=db, resume=False,
+              extractor=stub, build_dir=tmp_path / "build")
+    con = sqlite3.connect(db)
+    con.row_factory = sqlite3.Row
+    chapters = {r["chapter"] for r in con.execute("SELECT DISTINCT chapter FROM units")}
+    con.close()
+    assert "summary-redflags" in chapters
+    assert "summary-principles" in chapters
+
+
 def test_run_build_unknown_chapter_raises(tmp_path, corpus_path):
     import pytest
     from gloss.build import run_build

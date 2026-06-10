@@ -13,4 +13,5 @@ APOSD = Profile(
     figure_min_area=5000,
     section_re=r"^(\d+\.\d+)",
     chapter_re=r"^Chapter\s+(\d+)",
+    appendices={"summary-principles": (185, 185), "summary-redflags": (186, 187)},
 )

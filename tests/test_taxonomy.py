@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from gloss.taxonomy import load_taxonomy, principle_for_chapter, card_for
 
 _YAML = """
@@ -30,3 +32,16 @@ def test_card_for_renders_vocab(tmp_path):
     assert "general-purpose" in card and "push complexity down" in card and "use-case-specific methods" in card
     with pytest.raises(KeyError):
         card_for(tax, "nonexistent")
+
+
+def test_real_taxonomy_topic_principles_are_known_slugs():
+    from gloss.taxonomy import load_taxonomy, principle_for_chapter
+    tax = load_taxonomy(Path("corpora/aposd/taxonomy.yaml"))
+    slugs = {p["slug"] for p in tax["principles"]}
+    for topic in tax["topics"]:
+        principle = topic.get("principle")
+        assert principle is None or principle in slugs, \
+            f"ch{topic.get('chapter')} principle {principle!r} is not a known slug"
+    # load-bearing mappings: ch6 routes to a principle, ch10 is topic-only (null)
+    assert principle_for_chapter(tax, "6") == "general-purpose"
+    assert principle_for_chapter(tax, "10") is None

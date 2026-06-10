@@ -59,3 +59,15 @@ def test_run_build_single_chapter_still_works(tmp_path, corpus_path):
     con.close()
     assert chapters == {"6"}
     assert len(rows) >= 15
+
+
+def test_run_build_unknown_chapter_raises(tmp_path, corpus_path):
+    import pytest
+    from gloss.build import run_build
+    from gloss.extract import StubExtractor
+    stub = StubExtractor({"principle": "general-purpose", "type": "rationale",
+                          "context_line": "c", "applies_when": "a",
+                          "key_terms": ["k"], "questions": ["q?"]})
+    with pytest.raises(SystemExit):
+        run_build(chapter="999", model="stub", db=tmp_path / "x.db", resume=False,
+                  extractor=stub, build_dir=tmp_path / "build")

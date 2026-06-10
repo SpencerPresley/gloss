@@ -85,33 +85,32 @@ def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE,
             raise SystemExit(f"chapter {chapter!r} not found by detection/override")
 
     # 2) Segment each span + build prompts; size num_ctx once over the whole build.
-    plans = []          # (chapter_id, units, section_texts, card)
+    plans = []          # (chapter_id, units, section_texts, card, principle)
     all_prompts: list[str] = []
     for cid, els in specs:
         units, section_texts = segment(els, profile, cid)
         principle = principle_for_chapter(taxonomy, cid)
         card = card_for(taxonomy, principle) if principle else ""
-        plans.append((cid, units, section_texts, card))
+        plans.append((cid, units, section_texts, card, principle))
         all_prompts += [build_prompt(u, section_texts.get(u.section, ""), card, template)
                         for u in units]
 
     num_ctx = estimate_num_ctx(all_prompts, system)
-    total = sum(len(p[1]) for p in plans)
+    total = sum(len(units) for _, units, _, _, _ in plans)
     print(f"chapters={len(plans)} units={total} num_ctx={num_ctx} model={model}")
 
     # 3) One extractor for the whole build (method probed/pinned once); enrich + accumulate.
     if extractor is None:
         extractor = OllamaExtractor(model, num_ctx=num_ctx)
     all_rows: list[dict] = []
-    for cid, units, section_texts, card in plans:
+    for cid, units, section_texts, card, principle in plans:
         checkpoint = Path(build_dir) / f"ch{cid}" / "units.jsonl"
         if not resume and checkpoint.exists():
             checkpoint.unlink()
         rows = enrich_units(units, section_texts, extractor, card=card, template=template,
                             system=system, checkpoint=checkpoint)
         failed = sum(r["needs_enrich"] for r in rows)
-        print(f"  ch{cid}: {len(rows)} units ({failed} failed) "
-              f"principle={card.splitlines()[0] if card else 'null'}")
+        print(f"  ch{cid}: {len(rows)} units ({failed} failed) principle={principle or 'null'}")
         all_rows += rows
 
     failed = sum(r["needs_enrich"] for r in all_rows)

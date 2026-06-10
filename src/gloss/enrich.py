@@ -47,10 +47,20 @@ def _key(unit: RawUnit) -> str:
 
 
 def _done_keys(checkpoint: Path) -> set[str]:
-    """Keys already written to the checkpoint (for resume)."""
+    """Keys already SUCCESSFULLY enriched (needs_enrich == 0), for resume.
+
+    Failed units (needs_enrich == 1, e.g. from a quota cap) are deliberately excluded
+    so a subsequent resume re-attempts them rather than baking the empty result in.
+    """
     if not checkpoint.exists():
         return set()
-    return {json.loads(line)["key"] for line in checkpoint.read_text().splitlines() if line.strip()}
+    keys: set[str] = set()
+    for line in checkpoint.read_text().splitlines():
+        if line.strip():
+            row = json.loads(line)
+            if not row.get("needs_enrich"):
+                keys.add(row["key"])
+    return keys
 
 
 def _enrich_one(unit: RawUnit, section_texts, extractor: StructuredExtractor, *,
@@ -117,4 +127,9 @@ def enrich_units(units, section_texts, extractor: StructuredExtractor, *,
             for unit in pending:
                 write(work(unit))
 
-    return [json.loads(line) for line in checkpoint.read_text().splitlines() if line.strip()]
+    rows_by_key: dict[str, dict] = {}
+    for line in checkpoint.read_text().splitlines():
+        if line.strip():
+            row = json.loads(line)
+            rows_by_key[row["key"]] = row   # last wins: a resumed success supersedes an earlier failure
+    return list(rows_by_key.values())

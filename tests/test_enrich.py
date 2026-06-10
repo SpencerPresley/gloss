@@ -122,3 +122,38 @@ def test_enrich_units_concurrent_builds_chat_once(tmp_path):
     enrich_units(units, {"6.1": "s"}, ex, card="C", template="{card}{section}{passage}",
                  system="s", checkpoint=tmp_path / "u.jsonl", max_workers=4)
     assert builds == [1]   # chat built exactly once (warmup), not once-per-thread
+
+
+def test_enrich_resumes_failed_units_without_dup_rows(tmp_path, monkeypatch):
+    # A quota-cap failure must NOT be baked permanently: a later --resume re-enriches
+    # the failed units, and the recovered success must not create a duplicate row.
+    monkeypatch.setattr("gloss.enrich.time.sleep", lambda s: None)  # skip retry backoff
+    import json
+    from gloss.segment import RawUnit
+    from gloss.enrich import enrich_units
+    payload = {"principle": "general-purpose", "type": "rationale", "context_line": "c",
+               "applies_when": "a", "key_terms": ["k"], "questions": ["q?"]}
+
+    class _CapExtractor:        # simulates a quota cap: every call fails
+        model = "cap"
+        def extract(self, prompt, schema, *, system=None):
+            raise RuntimeError("simulated quota cap")
+
+    class _OkExtractor:         # cap lifted: every call succeeds
+        model = "ok"
+        def extract(self, prompt, schema, *, system=None):
+            return schema(**payload)
+
+    units = [RawUnit(f"passage {i}", "6", "6.1", 50) for i in range(3)]
+    sect = {"6.1": "s"}
+    ckpt = tmp_path / "units.jsonl"
+
+    rows1 = enrich_units(units, sect, _CapExtractor(), card="C",
+                         template="{card}{section}{passage}", system="s", checkpoint=ckpt)
+    assert len(rows1) == 3 and all(r["needs_enrich"] == 1 for r in rows1)   # all failed
+
+    rows2 = enrich_units(units, sect, _OkExtractor(), card="C",
+                         template="{card}{section}{passage}", system="s", checkpoint=ckpt)
+    assert len(rows2) == 3                                  # deduped by key, not 6
+    assert all(r["needs_enrich"] == 0 for r in rows2)       # all recovered on resume
+    assert len({r["key"] for r in rows2}) == 3

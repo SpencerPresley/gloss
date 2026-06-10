@@ -35,3 +35,26 @@ def test_segment_splits_prose_and_code():
     assert code.section == "6.3" and "changePosition" in code.text
     assert "better approach" in section_texts["6.3"]
     assert "changePosition" in section_texts["6.3"]   # section text includes code
+
+
+def test_heading_only_section_is_present_but_empty():
+    """A section whose heading has no body still appears, mapping to ''."""
+    els = [
+        Element("heading", "6.5 Conclusions", 60, 2),
+        Element("heading", "6.6 Taking it too far", 61, 2),
+    ]
+    _, section_texts = segment(els, _profile(), chapter="6")
+    assert section_texts["6.5"] == ""
+
+
+def test_figure_between_paragraphs_does_not_split_prose():
+    """A figure carries no prose text, so it must not fragment a prose run."""
+    els = [
+        Element("para", "before the figure", 50),
+        Element("figure", "[FIGURE 100x100]", 50),
+        Element("para", "after the figure", 50),
+    ]
+    units, _ = segment(els, _profile(), chapter="6")
+    prose = [u for u in units if not u.is_code]
+    assert len(prose) == 1
+    assert "before the figure" in prose[0].text and "after the figure" in prose[0].text

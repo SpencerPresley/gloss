@@ -9,7 +9,7 @@ import importlib.util
 from pathlib import Path
 
 from .parse import parse_pdf
-from .segment import segment
+from .segment import segment, split_chapters
 from .enrich import build_prompt, enrich_units
 from .extract import OllamaExtractor
 from .taxonomy import load_taxonomy, principle_for_chapter, card_for
@@ -44,34 +44,81 @@ def estimate_num_ctx(prompts: list[str], system: str,
     return max(floor, min(need, cap))
 
 
-def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE):
-    """Build the corpus db for one chapter (or whole book if chapter is None)."""
+def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE,
+              extractor=None, build_dir: Path = Path("build")):
+    """Build the corpus db: one chapter (``chapter`` set) or the whole book (``chapter`` None).
+
+    Chapters are detected via ``profile.chapter_re`` (or taken from ``profile.chapter_pages``
+    when that override is set). Each chapter is enriched with its own principle card; appendix
+    ranges are indexed with no card. All rows accumulate into one db.
+
+    Args:
+        chapter: Chapter id to build, or None for the whole book + appendices.
+        model: Ollama model tag for enrichment (ignored when ``extractor`` is given).
+        db: Output db path.
+        resume: Keep existing per-chapter checkpoints instead of wiping them.
+        instance: Corpus instance dir (profile/taxonomy/prompt).
+        extractor: Optional pre-built StructuredExtractor (tests inject a stub); when None,
+            one ``OllamaExtractor`` is built and reused across all chapters.
+        build_dir: Root for per-chapter JSONL checkpoints.
+
+    Returns:
+        All enrichment rows across every built chapter.
+    """
     profile = load_profile(instance)
     taxonomy = load_taxonomy(Path(instance) / "taxonomy.yaml")
     system, template = load_prompt(instance)
 
-    first, last = profile.chapter_pages.get(chapter, (None, None)) if chapter else (None, None)
-    elements = parse_pdf(profile.corpus_path, first, last, profile)
-    units, section_texts = segment(elements, profile, chapter or "")
+    # 1) Resolve per-chapter element spans: explicit override, else dynamic detection.
+    if profile.chapter_pages:
+        specs = [(cid, parse_pdf(profile.corpus_path, first, last, profile))
+                 for cid, (first, last) in profile.chapter_pages.items()]
+    else:
+        whole = parse_pdf(profile.corpus_path, None, None, profile)
+        specs = split_chapters(whole, profile)
+    if chapter is None:
+        specs += [(aid, parse_pdf(profile.corpus_path, first, last, profile))
+                  for aid, (first, last) in profile.appendices.items()]
+    else:
+        specs = [(cid, els) for cid, els in specs if cid == chapter]
+        if not specs:
+            raise SystemExit(f"chapter {chapter!r} not found by detection/override")
 
-    principle = principle_for_chapter(taxonomy, chapter) if chapter else None
-    card = card_for(taxonomy, principle) if principle else ""
+    # 2) Segment each span + build prompts; size num_ctx once over the whole build.
+    plans = []          # (chapter_id, units, section_texts, card)
+    all_prompts: list[str] = []
+    for cid, els in specs:
+        units, section_texts = segment(els, profile, cid)
+        principle = principle_for_chapter(taxonomy, cid)
+        card = card_for(taxonomy, principle) if principle else ""
+        plans.append((cid, units, section_texts, card))
+        all_prompts += [build_prompt(u, section_texts.get(u.section, ""), card, template)
+                        for u in units]
 
-    prompts = [build_prompt(u, section_texts.get(u.section, ""), card, template) for u in units]
-    num_ctx = estimate_num_ctx(prompts, system)
-    print(f"chapter={chapter} units={len(units)} principle={principle} num_ctx={num_ctx} model={model}")
+    num_ctx = estimate_num_ctx(all_prompts, system)
+    total = sum(len(p[1]) for p in plans)
+    print(f"chapters={len(plans)} units={total} num_ctx={num_ctx} model={model}")
 
-    checkpoint = Path("build") / f"ch{chapter or 'all'}" / "units.jsonl"
-    if not resume and checkpoint.exists():
-        checkpoint.unlink()
-    extractor = OllamaExtractor(model, num_ctx=num_ctx)
-    rows = enrich_units(units, section_texts, extractor, card=card, template=template,
-                        system=system, checkpoint=checkpoint)
-    failed = sum(r["needs_enrich"] for r in rows)
+    # 3) One extractor for the whole build (method probed/pinned once); enrich + accumulate.
+    if extractor is None:
+        extractor = OllamaExtractor(model, num_ctx=num_ctx)
+    all_rows: list[dict] = []
+    for cid, units, section_texts, card in plans:
+        checkpoint = Path(build_dir) / f"ch{cid}" / "units.jsonl"
+        if not resume and checkpoint.exists():
+            checkpoint.unlink()
+        rows = enrich_units(units, section_texts, extractor, card=card, template=template,
+                            system=system, checkpoint=checkpoint)
+        failed = sum(r["needs_enrich"] for r in rows)
+        print(f"  ch{cid}: {len(rows)} units ({failed} failed) "
+              f"principle={card.splitlines()[0] if card else 'null'}")
+        all_rows += rows
+
+    failed = sum(r["needs_enrich"] for r in all_rows)
     if failed:
-        print(f"WARNING: {failed}/{len(rows)} units failed enrichment (empty generated "
-              f"fields) — does model {model!r} support structured output?")
+        print(f"WARNING: {failed}/{len(all_rows)} units failed enrichment — does model "
+              f"{model!r} support structured output?")
     from .store import build_db
-    build_db(rows, Path(db))
-    print(f"built {len(rows)} units ({failed} enrichment failures) -> {db}")
-    return rows
+    build_db(all_rows, Path(db))
+    print(f"built {len(all_rows)} units ({failed} enrichment failures) -> {db}")
+    return all_rows

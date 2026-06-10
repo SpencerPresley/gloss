@@ -1,0 +1,29 @@
+[project]
+name = "gloss"
+version = "0.1.0"
+description = "Structured lexical retrieval from documents — turn a source text into a portable, cited, principle-anchored corpus."
+requires-python = ">=3.12"
+dependencies = []  # query-time path is stdlib-only; nothing required to RUN `gloss retrieve`
+
+[project.optional-dependencies]
+# Build-time only: parsing + LLM enrichment. Never imported on the query path.
+build = [
+    "pymupdf>=1.24",
+    "langchain>=1.3",
+    "langchain-ollama>=1.1",
+    "pydantic>=2.10",
+    "pyyaml>=6",
+]
+
+[project.scripts]
+gloss = "gloss.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gloss"]

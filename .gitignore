@@ -1,0 +1,26 @@
+# Secrets (none expected — Ollama cloud auth is via `ollama signin`, not env)
+.env
+.env.*
+!.env.example
+.claude/settings.local.json
+
+# Python / uv
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Build artifacts & checkpoints (regenerable; see spec §6)
+build/
+checkpoints/
+*.jsonl
+
+# Corpus PDFs — large + copyrighted; keep local, don't version
+resources/*.pdf
+
+# OS
+.DS_Store

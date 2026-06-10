@@ -32,5 +32,17 @@ def test_parse_ch6_has_heading_code_para(corpus_path):
     kinds = {e.kind for e in els}
     assert {"heading", "code", "para"} <= kinds
     assert any(e.kind == "heading" and e.level == 1 and "General-Purpose" in e.text for e in els)
+    assert any(e.kind == "heading" and e.level == 2 and e.text.startswith("6.1") for e in els)
     code = "\n".join(e.text for e in els if e.kind == "code")
     assert "changePosition(Position position, int numChars)" in code
+
+
+def test_parse_detects_figure(corpus_path):
+    """A real embedded image yields a figure Element with non-zero dimensions."""
+    p = _aposd_profile(corpus_path)
+    # Page 21 holds a large diagram (~374x172 pt); parse just that page to stay fast.
+    els = parse_pdf(corpus_path, 21, 21, p)
+    figures = [e for e in els if e.kind == "figure"]
+    assert figures, "expected a figure Element on page 21"
+    w, h = (int(n) for n in figures[0].text.removeprefix("[FIGURE ").rstrip("]").split("x"))
+    assert w > 0 and h > 0

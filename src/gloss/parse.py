@@ -62,7 +62,8 @@ def parse_pdf(path: Path, first_page: int | None, last_page: int | None,
 
     Iterates the (1-based, inclusive) page range — or the whole document when both
     bounds are ``None`` — and walks PyMuPDF's block/line/span structure, which is
-    already in reading order. Per line: a line whose spans are >=60% heading-font
+    already in reading order. The range is clamped to the document's page count, so
+    an out-of-range bound never raises. Per line: a line whose spans are >=60% heading-font
     becomes a ``heading`` (level 1 if its max span size reaches
     ``profile.chapter_size``, else level 2); a line whose every non-space span is
     code-font accumulates into a contiguous ``code`` block (flushed when a non-code
@@ -80,8 +81,8 @@ def parse_pdf(path: Path, first_page: int | None, last_page: int | None,
         The structural elements in reading order across the requested pages.
     """
     doc = fitz.open(path)
-    lo = (first_page or 1) - 1
-    hi = last_page or len(doc)
+    lo = max((first_page or 1) - 1, 0)
+    hi = min(last_page or len(doc), len(doc))
     out: list[Element] = []
     code_buf: list[str] = []
     code_page = 0

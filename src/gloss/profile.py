@@ -19,7 +19,7 @@ class Profile:
         head_font: Substring identifying the heading font.
         chapter_size: Minimum span size (pt) for a chapter-title heading (level 1).
         section_size: Minimum span size (pt) for a section heading (level 2).
-        figure_min_area: Minimum image area (px^2) to count as a real figure (drops icons).
+        figure_min_area: Minimum image bbox area (pt^2) to count as a real figure (drops icons).
         section_re: Regex whose first group captures a section number in a heading
             (e.g. ``r"^(\\d+\\.\\d+)"``). Used by the later segment stage.
         chapter_pages: Map of chapter id -> (first_page, last_page), 1-based inclusive.

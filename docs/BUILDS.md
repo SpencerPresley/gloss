@@ -240,9 +240,9 @@ decision rationale.
 ## Troubleshooting
 
 **`no such table: units_fts` / `no such table: units`** — the db is an empty 0-byte stub,
-not a real corpus. The CLI's default `--db` is the bare relative path `aposd.db`
-(`cli.py:49`,`:59`); `build/aposd.db` is a 0-byte placeholder a prior run left behind
-(defaulted or pointed there, then never populated because the model build wrote elsewhere):
+not a real corpus. `--db` is required (no default — `cli.py:49`,`:59`,`:68`), so this comes
+from pointing `--db` at a stale 0-byte file like `build/aposd.db` that a prior run left
+behind (never populated because the model build wrote elsewhere):
 
 ```bash
 $ wc -c build/aposd.db

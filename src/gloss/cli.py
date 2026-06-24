@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> None:
 
     r = sub.add_parser("retrieve", help="retrieve passages for a design situation")
     r.add_argument("query")
-    r.add_argument("--db", default="aposd.db")
+    r.add_argument("--db", required=True)
     r.add_argument("-k", type=int, default=5)
     r.add_argument("--principle", action="append")
     r.add_argument("--type", action="append")
@@ -56,7 +56,7 @@ def main(argv: list[str] | None = None) -> None:
     b = sub.add_parser("build", help="build the corpus db from the source document")
     b.add_argument("--chapter")
     b.add_argument("--model", default="minimax-m3:cloud")
-    b.add_argument("--db", default="aposd.db")
+    b.add_argument("--db", required=True)
     b.add_argument("--resume", action="store_true")
     b.add_argument("--workers", type=int, default=1, help="concurrent enrichment requests")
     b.add_argument("--build-dir", default="build",
@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> None:
     b.set_defaults(func=cmd_build)
 
     e = sub.add_parser("eval", help="score retrieval against eval cases")
-    e.add_argument("--db", default="aposd.db")
+    e.add_argument("--db", required=True)
     e.add_argument("--cases", default="corpora/aposd/cases.yaml")
     e.set_defaults(func=cmd_eval)
 

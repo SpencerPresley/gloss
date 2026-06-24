@@ -41,10 +41,11 @@ uv run --extra build pytest -q
 
 ## Two facts that bite
 
-1. **The live db is model-named, not `aposd.db`.** Builds go to `build/<model>.db` (the
-   real corpus today is **`build/minimax.db`**, 257 units). The CLI default `--db aposd.db`
-   / the stray `build/aposd.db` is often a **0-byte stub** → `OperationalError: no such
-   table: units_fts`. Verify before use: `sqlite3 <db> "SELECT COUNT(*) FROM units;"`.
+1. **`--db` is required (no default), and the live db is model-named.** Builds go to
+   `build/<model>.db` (the real corpus today is **`build/minimax.db`**, 257 units) — pass
+   `--db` explicitly on every command. A stale 0-byte `build/aposd.db` left by an old build
+   will open but error → `OperationalError: no such table: units_fts`; verify with
+   `sqlite3 <db> "SELECT COUNT(*) FROM units;"`.
 2. **Verbatim text and the coarse `principle` are not the LLM's.** Unit boundaries + text
    are fixed deterministically at segmentation; `principle` is set from the taxonomy. The
    LLM only writes *retrieval metadata* (context line, symptom questions, key terms). So

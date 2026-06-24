@@ -33,14 +33,14 @@ fields, so what comes back is always the source's own words.
 uv run --extra build pytest -q
 
 # Build a corpus (needs the source PDF locally + an Ollama model — neither is included):
-uv run --extra build gloss build --model <model> --workers 8 --db build/aposd.db
+uv run --extra build gloss build --model <model> --workers 8 --db build/<model>.db
 
 # Retrieve (stdlib-only — no extras):
-uv run gloss retrieve "should I make this API general purpose" --db build/aposd.db -k 3 \
+uv run gloss retrieve "should I make this API general purpose" --db build/minimax.db -k 3 \
     [--principle general-purpose] [--type red_flag] [--json]
 
 # Eval — top-k hit-rate over corpora/<name>/cases.yaml:
-uv run --extra build gloss eval --db build/aposd.db
+uv run --extra build gloss eval --db build/minimax.db
 ```
 
 ## Layout

@@ -1,0 +1,776 @@
+# CANDIDATE eval cases — Track D expansion (2026-07-10). NOT scored yet.
+#
+# Provenance: each case was drafted while reading ONLY the source unit's verbatim
+# `text` (+ chapter/section for the pin) — never the stored retrieval metadata
+# (questions / key_terms / context_line / applies_when). Screened for word-4-gram
+# overlap against that metadata by screen_candidates.py (kept in this directory).
+# Candidates were NOT filtered by what the current system retrieves — admissibility
+# was well-posedness only ("does this passage answer this query, and is it the
+# passage a competent reader would want?"). Ambiguous cases OR-pin both fields
+# (expect_section + expect_principle/expect_chapter are OR-matched by evalrun).
+#
+# The `# u<id> <section> <type>` comment above each case is the source unit.
+#
+# Vetting: Spencer reviews; approved cases are appended to cases.yaml under
+#   # --- synthetic set (generated from verbatim text, vetted 2026-07-10) ---
+# so curated-vs-synthetic can always be scored separately. Do not merge unvetted.
+cases:
+  # ---- ch1: introduction ----
+  # u1 1 rationale
+  - query: "our team still does all the design up front and then spends a year just implementing it"
+    expect_section: "1"
+  # u1 1 rationale
+  - query: "is software design a phase you finish or something that never ends"
+    expect_section: "1"
+  # u2 1.1 rationale
+  - query: "training myself to spot design smells in my own work"
+    expect_section: "1.1"
+  # u2 1.1 rationale
+  - query: "I applied a design principle everywhere and the code actually got worse"
+    expect_section: "1.1"
+
+  # ---- ch2: the nature of complexity ----
+  # u4 2.1 definition
+  - query: "the codebase is tiny but changing anything is still painful"
+    expect_section: "2.1"
+  # u4 2.1 definition
+  - query: "people call our system complex just because it's big, is size really the problem"
+    expect_section: "2.1"
+  # u5 2.2 definition
+  - query: "callers of my function have to remember to free the buffer it returns"
+    expect_section: "2.2"
+  # u5 2.2 definition
+  - query: "I never know whether I've found all the places a change needs to touch until something breaks"
+    expect_section: "2.2"
+  # u6 2.3 definition
+  - query: "the sending side and the receiving side of our protocol always change together"
+    expect_section: "2.3"
+    expect_principle: information-hiding
+  # u6 2.3 definition
+  - query: "everything in this system feels wired to everything else"
+    expect_section: "2.3"
+    expect_principle: complexity
+  # u7 2.4 rationale
+  - query: "no single decision made this codebase bad, it got here one small compromise at a time"
+    expect_section: "2.4"
+    expect_principle: strategic-programming
+
+  # ---- ch3: working code isn't enough ----
+  # u10 3.1 definition
+  - query: "I keep telling myself this little hack is fine because the deadline is close"
+    expect_principle: strategic-programming
+  # u10 3.1 definition
+  - query: "we patch around problems and now the patches need patches"
+    expect_principle: strategic-programming
+  # u11 3.2 definition
+  - query: "found a design mistake in last month's code — fix it now or build on top and move on"
+    expect_principle: strategic-programming
+  # u11 3.2 definition
+  - query: "quick fix now or proper fix later"
+    expect_principle: strategic-programming
+  # u13 3.4 rationale
+  - query: "we're an early-stage startup, can we really afford to slow down for design"
+    expect_section: "3.4"
+  # u13 3.4 rationale
+  - query: "our spaghetti codebase is starting to scare off the good candidates we interview"
+    expect_section: "3.4"
+  # u13 3.4 rationale
+  - query: "our motto is basically ship now, clean up when we're rich"
+    expect_section: "3.4"
+
+  # ---- ch4: modules should be deep ----
+  # u16 4.1 definition
+  - query: "using this component correctly seems to require understanding its whole implementation"
+    expect_section: "4.1"
+    expect_principle: information-hiding
+  # u16 4.1 definition
+  - query: "keeping the tree-rebalancing details invisible to everyone who uses the collection"
+    expect_section: "4.1"
+    expect_principle: information-hiding
+  # u18 4.3 definition
+  - query: "my API hides when data actually reaches disk but some callers genuinely need to know"
+    expect_section: "4.3"
+  # u18 4.3 definition
+  - query: "which details are safe to leave out when I present a simplified interface"
+    expect_section: "4.3"
+  # u19 4.4 example
+  - query: "I want the API to stay frozen while the internals keep getting rewritten"
+    expect_section: "4.4"
+    expect_principle: deep-modules
+  # u19 4.4 example
+  - query: "tiny surface, huge machinery underneath — real examples?"
+    expect_section: "4.4"
+    expect_principle: deep-modules
+  # u20 4.5 red_flag
+  - query: "the doc comment for this little method came out longer than its body"
+    expect_section: "4.5"
+    expect_principle: comments
+  # u20 4.5 red_flag
+  - query: "calling the helper takes more keystrokes than doing the work inline"
+    expect_section: "4.5"
+  # u21 4.6 red_flag
+  - query: "team dogma says smaller classes are always better, split everything"
+    expect_section: "4.6"
+    expect_principle: deep-modules
+  # u21 4.6 red_flag
+  - query: "a hundred tiny classes each doing almost nothing, all boilerplate"
+    expect_section: "4.6"
+    expect_principle: deep-modules
+  # u22 4.7 red_flag
+  - query: "forgot to wrap the stream in its buffered flavor and file reads got dead slow"
+    expect_section: "4.7"
+  # u22 4.7 red_flag
+  - query: "most callers only ever touch two of my API's fifteen options, the rest just get in the way"
+    expect_section: "4.7"
+    expect_principle: deep-modules
+
+  # ---- ch5: information hiding ----
+  # u28 5.1 definition
+  - query: "we can't change our storage format anymore because callers learned to depend on it"
+    expect_principle: information-hiding
+  # u28 5.1 definition
+  - query: "every internal refactor somehow turns into a breaking change for callers"
+    expect_principle: information-hiding
+  # u29 5.2 definition
+  - query: "format logic is duplicated between our reader and writer — merge the two, or extract a shared class"
+    expect_principle: information-hiding
+  # u30 5.3 definition
+  - query: "I split the feature into a reader class, a processor class, and a writer class"
+    expect_principle: information-hiding
+  # u30 5.3 definition
+  - query: "one class per pipeline stage, was that a mistake"
+    expect_principle: information-hiding
+  # u32 5.5 example
+  - query: "the class that reads requests off the socket and the class that parses them both understand the whole message format"
+    expect_principle: information-hiding
+  # u32 5.5 example
+  - query: "replacing three step-by-step methods with one method that does the whole computation"
+    expect_principle: information-hiding
+  # u35 5.8 rationale
+  - query: "does encapsulation apply between the private methods inside one class"
+    expect_section: "5.8"
+  # u35 5.8 rationale
+  - query: "this one instance variable gets touched from every corner of the class"
+    expect_section: "5.8"
+
+  # ---- ch6: general-purpose modules are deeper ----
+  # u40 6 definition
+  - query: "build only what today's feature needs, or design for uses we can only guess at"
+    expect_principle: general-purpose
+  # u41 6.1 definition
+  - query: "I keep over-building classes for imaginary future requirements"
+    expect_principle: general-purpose
+  # u41 6.1 definition
+  - query: "the module does exactly what we need but its API is welded to this one use case"
+    expect_principle: general-purpose
+  # u42 6.2 red_flag
+  - query: "the storage class grew one method for every button in the UI"
+    expect_principle: general-purpose
+  # u42 6.2 red_flag
+  - query: "API mirrors the UI screens one-to-one"
+    expect_principle: general-purpose
+  # u44 6.4 rationale
+  - query: "my method claims to hide the details but callers read its source to be sure of the behavior"
+    expect_section: "6.4"
+    expect_principle: deep-modules
+  # u45 6.5 rationale
+  - query: "I collapsed three delete variants into one method — did I go far enough, or too far"
+    expect_principle: general-purpose
+  # u45 6.5 rationale
+  - query: "my minimal one-character-at-a-time interface makes every caller write loops"
+    expect_principle: general-purpose
+
+  # ---- ch7: different layer, different abstraction ----
+  # u54 7 definition
+  - query: "every layer of our stack exposes basically the same operations as the layer below it"
+    expect_principle: information-hiding
+  # u54 7 definition
+  - query: "three layers deep, same API each time"
+    expect_principle: information-hiding
+  # u55 7.1 red_flag
+  - query: "both classes offer an insert method but only one of them actually implements it — who should own this feature"
+    expect_principle: information-hiding
+  # u55 7.1 red_flag
+  - query: "changing a signature in the inner class means changing its twin in the outer class"
+    expect_principle: information-hiding
+  # u56 7.2 definition
+  - query: "my router method shares its signature with every handler it dispatches to, is that bad"
+    expect_section: "7.2"
+  # u56 7.2 definition
+  - query: "the wrapper adds real logic of its own, so the matching signature is fine, right"
+    expect_section: "7.2"
+  # u57 7.3 red_flag
+  - query: "I keep writing wrapper classes that each add one small feature to the thing they wrap"
+    expect_principle: information-hiding
+  # u57 7.3 red_flag
+  - query: "maybe the new behavior belongs inside the wrapped class itself, not in yet another layer"
+    expect_section: "7.3"
+  # u59 7.5 definition
+  - query: "this parameter tunnels through six functions that never look at it"
+    expect_principle: information-hiding
+  # u59 7.5 definition
+  - query: "tempted to just make it a global instead of threading it through every call"
+    expect_section: "7.5"
+  # u59 7.5 definition
+  - query: "the config object crawls through every constructor in the app"
+    expect_section: "7.5"
+
+  # ---- ch8: pull complexity downwards ----
+  # u62 8 rationale
+  - query: "is it fine to punt the hard cases to my callers and let them deal"
+    expect_chapter: "8"
+    expect_section: "10.2"
+  # u62 8 rationale
+  - query: "simple interface or simple implementation — when they fight, which wins"
+    expect_chapter: "8"
+  # u63 8.1 example
+  - query: "my line-based file API makes the UI stitch lines back together for every partial edit"
+    expect_section: "8.1"
+  # u64 8.2 rationale
+  - query: "instead of a retry-interval setting, could the system just measure and pick its own"
+    expect_section: "8.2"
+  # u64 8.2 rationale
+  - query: "before I add this option: will anyone actually know what value to set it to"
+    expect_section: "8.2"
+
+  # ---- ch9: better together or better apart ----
+  # u67 9 definition
+  - query: "after the split, callers juggle two objects where they used to manage one"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u67 9 definition
+  - query: "these two features hinge on the same document syntax — same home or separate"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u67 9 definition
+  - query: "the block cache always uses a hash table, so combine them?"
+    expect_section: "9"
+  # u70 9.3 rationale
+  - query: "is extracting a two-line snippet into a helper worth it"
+    expect_section: "9.3"
+  # u70 9.3 rationale
+  - query: "the same cleanup lines appear before every error return in this method"
+    expect_section: "9.3"
+    expect_principle: deep-modules
+  # u71 9.4 definition
+  - query: "my utility layer keeps accumulating app-specific helpers"
+    expect_section: "9.4"
+    expect_principle: general-purpose
+  # u71 9.4 definition
+  - query: "fifth time I've copy-pasted this same nontrivial chunk"
+    expect_section: "9.4"
+    expect_principle: deep-modules
+  # u74 9.8 rationale
+  - query: "the linter flags every function that tops twenty lines and wants it split"
+    expect_section: "9.8"
+    expect_principle: deep-modules
+  # u74 9.8 rationale
+  - query: "after extracting the helper I read parent and child side by side to follow the logic"
+    expect_section: "9.8"
+  # u74 9.8 rationale
+  - query: "is my 300-line function automatically a problem"
+    expect_section: "9.8"
+  # u79 9.7 example
+  - query: "the undo history lives inside the document class and the UI has to call back into it"
+    expect_section: "9.7"
+  # u79 9.7 example
+  - query: "where should a general undo and redo engine actually live"
+    expect_section: "9.7"
+    expect_principle: deep-modules
+
+  # ---- ch10: define errors out of existence (principle-null; chapter/section pins) ----
+  # u82 10.2 rationale
+  - query: "our validation rejects anything slightly off, so callers wrap the calls and swallow the failures"
+    expect_chapter: "10"
+  # u82 10.2 rationale
+  - query: "removing something that's already gone throws instead of just succeeding"
+    expect_chapter: "10"
+  # u84 10.4 example
+  - query: "users hunt down and kill whatever process is holding the file before the delete will go through"
+    expect_section: "10.4"
+  # u84 10.4 example
+  - query: "delete fails because the file is in use, everyone rages"
+    expect_section: "10.4"
+  # u86 10.6 definition
+  - query: "should the client library retry quietly through the outage or surface it to the application"
+    expect_section: "10.6"
+  # u86 10.6 definition
+  - query: "handle the flaky network at the bottom so the app never finds out"
+    expect_section: "10.6"
+  # u88 10.8 definition
+  - query: "is it ever right to just crash instead of handling the error"
+    expect_section: "10.8"
+  # u88 10.8 definition
+  - query: "checking the allocator's return value after every single call is drowning the code"
+    expect_section: "10.8"
+  # u88 10.8 definition
+  - query: "out of memory: recover or die?"
+    expect_section: "10.8"
+  # u90 10.10 red_flag
+  - query: "our network layer swallows every failure, so applications can't even tell messages were lost"
+    expect_section: "10.10"
+  # u92 10.1 rationale
+  - query: "the recovery code for one failure keeps spawning new failures of its own"
+    expect_section: "10.1"
+  # u92 10.1 rationale
+  - query: "half this module is error handling at this point"
+    expect_chapter: "10"
+
+  # ---- ch11: design it twice (principle-null; single unit) ----
+  # u93 11 definition
+  - query: "the strongest engineer on the team never considers a second approach to anything"
+    expect_chapter: "11"
+  # u93 11 definition
+  - query: "both interface options I sketched feel awkward — now what"
+    expect_chapter: "11"
+
+  # ---- ch12: why write comments ----
+  # u95 12.1 rationale
+  - query: "nothing in the signature reveals if the end index is inclusive"
+    expect_section: "12.1"
+    expect_principle: comments
+  # u95 12.1 rationale
+  - query: "we keep methods tiny so the code documents itself, and now there are a thousand tiny methods"
+    expect_section: "12.1"
+  # u96 12.2 rationale
+  - query: "there's never time in the sprint for writing comments"
+    expect_principle: comments
+  # u99 12.5 rationale
+  - query: "six weeks later I can't remember why my own code does it this way"
+    expect_principle: comments
+  # u99 12.5 rationale
+  - query: "the author left and nobody can reconstruct what they were thinking"
+    expect_principle: comments
+
+  # ---- ch13: comments should describe things not obvious from the code ----
+  # u101 13.1 definition
+  - query: "what actually deserves a comment — every method, or only the public surface"
+    expect_principle: comments
+  # u101 13.1 definition
+  - query: "do trivial accessors need doc comments too"
+    expect_section: "13.1"
+  # u113 13.2 red_flag
+  - query: "how do I word a comment so it adds something beyond the identifier's name"
+    expect_section: "13.2"
+    expect_principle: comments
+  # u114 13.3 definition
+  - query: "nothing says what units this timeout is in"
+    expect_section: "13.3"
+    expect_principle: comments
+  # u114 13.3 definition
+  - query: "half these fields can be null and nothing explains what null means"
+    expect_section: "13.3"
+  # u121 13.5 definition
+  - query: "should the doc explain how the method works inside or just how to use it"
+    expect_section: "13.5"
+  # u121 13.5 definition
+  - query: "if the usage docs have to describe the internals, is the design itself broken"
+    expect_section: "13.5"
+    expect_principle: comments
+  # u126 13.5 red_flag
+  - query: "our API reference brims with internal trivia that no user ever needed"
+    expect_section: "13.5"
+  # u130 13.7 example
+  - query: "adding one enum value silently requires edits in five other files"
+    expect_section: "13.7"
+  # u130 13.7 example
+  - query: "a rule spans several files — where should its write-up live so people actually stumble on it"
+    expect_section: "13.7"
+  # u108 13.8 definition
+  - query: "a reviewer says my function is confusing but it looks perfectly clear to me"
+    expect_section: "13.8"
+    expect_chapter: "18"
+
+  # ---- ch14: choosing names (principle-null) ----
+  # u134 14.1 example
+  - query: "one identifier does double duty for two unrelated concepts in this codebase"
+    expect_chapter: "14"
+  # u134 14.1 example
+  - query: "do bad names actually cause bugs or are they just ugly"
+    expect_chapter: "14"
+  # u135 14.2 definition
+  - query: "would anyone guess what this variable holds from the name alone"
+    expect_chapter: "14"
+  # u137 14.4 definition
+  - query: "we use three different names for the same concept across the codebase"
+    expect_section: "14.4"
+    expect_chapter: "17"
+  # u137 14.4 definition
+  - query: "i is the inner loop in half our files and the outer loop in the rest"
+    expect_section: "14.4"
+  # u138 14.5 rationale
+  - query: "are really short variable names ever acceptable"
+    expect_chapter: "14"
+  # u144 14.3 red_flag
+  - query: "the method is named processData, which narrows it down to anything"
+    expect_section: "14.3"
+  # u144 14.3 red_flag
+  - query: "everything here is named data, info, or result"
+    expect_section: "14.3"
+
+  # ---- ch15: write the comments first ----
+  # u150 15.2 definition
+  - query: "my backlog of comments to backfill only ever grows"
+    expect_section: "15.2"
+    expect_principle: comments
+  # u151 15.3 rationale
+  - query: "describing this method completely takes paragraphs"
+    expect_section: "15.3"
+    expect_principle: comments
+  # u153 15.5 rationale
+  - query: "deferring comment-writing until things settle — real savings or false economy"
+    expect_principle: comments
+
+  # ---- ch16: modifying existing code ----
+  # u156 16.1 definition
+  - query: "every bug fix here is the smallest diff that could possibly work"
+    expect_principle: strategic-programming
+  # u156 16.1 definition
+  - query: "can a small fix legitimately balloon into redesigning the code around it"
+    expect_principle: strategic-programming
+  # u158 16.3 red_flag
+  - query: "the explanation of why we changed this went into the changelog, never into the code"
+    expect_section: "16.3"
+  # u158 16.3 red_flag
+  - query: "the version control log is our only documentation"
+    expect_section: "16.3"
+  # u163 16.4 rationale
+  - query: "the same explanation is pasted into four comments and the copies are drifting apart"
+    expect_section: "16.4"
+  # u163 16.4 rationale
+  - query: "should the comment restate the protocol spec or simply point at it"
+    expect_section: "16.4"
+
+  # ---- ch17: consistency (principle-null) ----
+  # u165 17.1 definition
+  - query: "every file in this repo formats and names things its own way"
+    expect_chapter: "17"
+  # u166 17.2 rationale
+  - query: "the new hire keeps replacing our conventions with better ones"
+    expect_section: "17.2"
+  # u166 17.2 rationale
+  - query: "line endings keep flip-flopping and churning every diff"
+    expect_section: "17.2"
+  # u167 17.3 definition
+  - query: "uniformity pushed us to force-fit a pattern where it clearly didn't belong"
+    expect_section: "17.3"
+
+  # ---- ch18: code should be obvious (principle-null) ----
+  # u169 18 definition
+  - query: "new hires' first guesses about what this code does are reliably wrong"
+    expect_chapter: "18"
+  # u175 18.1 code
+  - query: "should long method bodies be broken up with blank lines between steps"
+    expect_section: "18.1"
+  # u177 18.2 definition
+  - query: "callbacks fire from somewhere and I can't trace what runs when"
+    expect_section: "18.2"
+  # u179 18.2 red_flag
+  - query: "returning a generic pair was quick to write, but nothing conveys what its two slots hold"
+    expect_section: "18.2"
+  # u179 18.2 red_flag
+  - query: "easy to write, hell to read"
+    expect_chapter: "18"
+
+  # ---- ch19: software trends (principle-null) ----
+  # u182 19.1 definition
+  - query: "subclasses reach into the parent's fields so nothing can change independently"
+    expect_section: "19.1"
+  # u182 19.1 definition
+  - query: "shared behavior: base class or a helper the classes compose"
+    expect_section: "19.1"
+  # u184 19.3 rationale
+  - query: "nobody dares restructure anything because there's no test suite to catch regressions"
+    expect_section: "19.3"
+  # u185 19.4 rationale
+  - query: "writing all the tests up front, before any implementation — does the design come out better"
+    expect_section: "19.4"
+  # u185 19.4 rationale
+  - query: "when fixing a bug, do I write the failing test first or fix first"
+    expect_section: "19.4"
+  # u187 19.6 rationale
+  - query: "the class is nothing but accessors, one get and one set per field"
+    expect_section: "19.6"
+    expect_principle: information-hiding
+
+  # ---- ch20: designing for performance (principle-null) ----
+  # u190 20.1 rationale
+  - query: "optimize while writing or wait until something is proven slow"
+    expect_section: "20.1"
+  # u190 20.1 rationale
+  - query: "we got 5x slower through a thousand small inefficiencies, no single one worth fixing"
+    expect_section: "20.1"
+  # u190 20.1 rationale
+  - query: "our default map choice is sorted even when nothing needs the ordering"
+    expect_section: "20.1"
+  # u192 20.3 definition
+  - query: "the profiler found the hot spot but there's no better algorithm left to switch to"
+    expect_section: "20.3"
+  # u192 20.3 definition
+  - query: "special-case checks are sprinkled all over our hottest path"
+    expect_section: "20.3"
+  # u193 20.4 example
+  - query: "the buffer allocation shows up in every profile — is a redesign around it worth it"
+    expect_chapter: "20"
+
+  # ---- ch21 + summaries ----
+  # u195 21 rationale
+  - query: "does all this design discipline ever pay itself back"
+    expect_section: "21"
+    expect_principle: strategic-programming
+  # u197 summary-redflags definition
+  - query: "a checklist of design warning signs to scan for in code review"
+    expect_section: "summary-redflags"
+
+  # ==== agent-voice tranche (2026-07-10) ====
+  # Queries phrased the way the consuming agent (Claude, mid-workflow) actually
+  # issues them, in the two intended workflows:
+  #   [design]   task arrives -> skill invoked -> gloss consulted per design
+  #              decision while ironing out the approach. Shape: prescriptive
+  #              decision questions, alternatives held side by side, compact.
+  #   [refactor] reviewing existing code for improvement. Shape: third-person
+  #              descriptions of observed code, concrete identifiers/language
+  #              vocabulary (python, asyncio, dict), present tense.
+  # Drafting direction is FORWARD (unlike the tranche above): the query came
+  # from workflow simulation first, then was pinned by locating the answering
+  # passage — reading verbatim text only, same firewall, same 4-gram screen.
+  # A few are deliberate voice-pairs of a dev-voice case above (marked): same
+  # underlying situation, different register — they measure voice robustness.
+  # Post-skill queries that reuse the book's own vocabulary are deliberately
+  # EXCLUDED: the leakage firewall can't distinguish them from index echo, and
+  # they're the easy case anyway. The future query-log path covers those.
+
+  # -- [design] --
+  # u20 4.5 red_flag | design
+  - query: "how many public methods before an interface is too big"
+    expect_principle: deep-modules
+  # u45 6.5 rationale | design
+  - query: "one general method with a mode parameter or several specific methods"
+    expect_principle: general-purpose
+  # u150 15.2 definition | design (interface-first also lives in ch11)
+  - query: "brand-new module: settle the interface first or prototype the implementation"
+    expect_section: "15.2"
+    expect_chapter: "11"
+  # u22 4.7 red_flag | design
+  - query: "the frequent path should need zero setup, with rare options tucked out of sight"
+    expect_section: "4.7"
+    expect_principle: deep-modules
+  # u82 10.2 rationale | design
+  - query: "return null or raise an exception when the key is missing"
+    expect_chapter: "10"
+  # u41 6.1 definition | design
+  - query: "how much future flexibility belongs in a v1 interface"
+    expect_principle: general-purpose
+  # u74 9.8 rationale | design
+  - query: "criteria for splitting a method versus keeping it whole"
+    expect_section: "9.8"
+  # u55 7.1 red_flag | design
+  - query: "wrap the inner class behind a facade or let callers use it directly"
+    expect_section: "7.1"
+    expect_principle: information-hiding
+  # u82 10.2 rationale | design (punting also answered by ch8)
+  - query: "before adding a new exception type: can any caller realistically handle it"
+    expect_section: "10.2"
+    expect_chapter: "8"
+  # u93 11 definition | design
+  - query: "two candidate designs: simpler interface but slower implementation, or the reverse"
+    expect_chapter: "11"
+  # u150 15.2 definition | design
+  - query: "write the class comment before the code to smoke-test the abstraction"
+    expect_section: "15.2"
+    expect_principle: comments
+  # u54 7 definition | design
+  - query: "in a layered design, what should actually change between adjacent layers"
+    expect_section: "7"
+    expect_principle: information-hiding
+  # u80 10 definition | design
+  - query: "error handling strategy for a new public api"
+    expect_chapter: "10"
+  # u67 9 definition | design
+  - query: "parser builds the tree and a separate walker evaluates it — one class or two"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u134 14.1 example | design
+  - query: "how much time is worth spending on names during design"
+    expect_chapter: "14"
+  # u41 6.1 definition | design
+  - query: "premature generalization or premature specialization, which mistake costs more"
+    expect_principle: general-purpose
+  # u57 7.3 red_flag | design
+  - query: "does wrapping the third-party client library buy anything or is it pure indirection"
+    expect_section: "7.3"
+    expect_principle: information-hiding
+  # u71 9.4 definition | design
+  - query: "a helper only one feature uses: keep it near the feature or in the shared library"
+    expect_section: "9.4"
+    expect_principle: general-purpose
+  # u59 7.5 definition | design
+  - query: "one context object passed everywhere or explicit parameters on every call"
+    expect_section: "7.5"
+  # u71 9.4 definition | design
+  - query: "adding a second output format: copy the existing emitter or generalize it"
+    expect_principle: general-purpose
+  # u156 16.1 definition | design
+  - query: "the new feature clashes with the current module boundaries — bend the feature or move the boundaries"
+    expect_principle: strategic-programming
+
+  # -- [refactor] --
+  # u55 7.1 red_flag | refactor | voice-pair of "this small class just forwards calls..."
+  - query: "nearly every method here delegates to a single private helper"
+    expect_section: "7.1"
+    expect_principle: deep-modules
+  # u72 9.5 example | refactor (pin convention follows the existing boolean-flag cases)
+  - query: "function with six boolean parameters that each toggle some behavior"
+    expect_section: "9.5"
+    expect_principle: general-purpose
+  # u71 9.4 definition | refactor | voice-pair of "fifth time I've copy-pasted..."
+  - query: "the same guard clause copy-pasted into every handler"
+    expect_section: "9.4"
+    expect_principle: deep-modules
+  # u6 2.3 definition | refactor
+  - query: "utility module imported by everything so every change ripples across the app"
+    expect_principle: complexity
+  # u70 9.3 rationale | refactor
+  - query: "extract a four-line snippet that touches three locals, or leave it inline"
+    expect_section: "9.3"
+  # u90 10.10 red_flag | refactor | voice-pair of "our network layer swallows every failure..."
+  - query: "exceptions caught, logged, and dropped so callers never learn about failures"
+    expect_section: "10.10"
+  # u82 10.2 rationale | refactor
+  - query: "stack of nested ifs handling rare edge cases before the real work starts"
+    expect_chapter: "10"
+  # u67 9 definition | refactor
+  - query: "UserSession class stores auth tokens and also renders html"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u28 5.1 definition | refactor
+  - query: "one module reaches into another module's internal dict and mutates it"
+    expect_principle: information-hiding
+  # u29 5.2 definition | refactor | voice-pair of "every time I change the file format code..."
+  - query: "every schema change means editing three classes in lockstep"
+    expect_principle: information-hiding
+  # u182 19.1 definition | refactor
+  - query: "subclassing the built-in list just to add one convenience method"
+    expect_section: "19.1"
+    expect_principle: information-hiding
+  # u74 9.8 rationale | refactor | voice-pair of "is my 300-line function automatically a problem"
+  - query: "an 800-line main function drives the whole tool"
+    expect_section: "9.8"
+  # u71 9.4 definition | refactor (duplicated knowledge also answered by ch5 leakage units)
+  - query: "identical retry logic implemented independently in four services"
+    expect_section: "9.4"
+    expect_principle: information-hiding
+  # u29 5.2 definition | refactor
+  - query: "platform-specific branches scattered through every file instead of isolated in one place"
+    expect_principle: information-hiding
+  # u88 10.8 definition | refactor | voice-pair of "checking the allocator's return value..."
+  - query: "the function returns null on failure and just assumes every caller remembers to check"
+    expect_section: "10.8"
+  # u156 16.1 definition | refactor
+  - query: "while rewriting the internals anyway, should the awkward public api get fixed too"
+    expect_principle: strategic-programming
+  # u179 18.2 red_flag | refactor
+  - query: "function returns a tuple of three unnamed values callers have to unpack by position"
+    expect_section: "18.2"
+  # u177 18.2 definition | refactor | voice-pair of "callbacks fire from somewhere..."
+  - query: "asyncio callbacks and event handlers leave the control flow impossible to trace"
+    expect_section: "18.2"
+  # u184 19.3 rationale | refactor | voice-pair of "nobody dares restructure anything..."
+  - query: "planning a big restructure of a module that has zero test coverage"
+    expect_section: "19.3"
+  # u5 2.2 definition | refactor (pulling the obligation into the module is ch8)
+  - query: "move the cleanup into a context manager so callers can't forget it"
+    expect_section: "2.2"
+    expect_chapter: "8"
+  # u135 14.2 definition | refactor
+  - query: "picking between two candidate names for the method that merges two configs"
+    expect_chapter: "14"
+
+  # ==== vocab tranche (2026-07-10): folk synonyms + variant forms ====
+  # Two flavors of term-driven queries, both passing the STRICT screen (no
+  # metadata-overlap exemptions — the exact-term flavor that would have needed
+  # a screen carve-out was considered and declined):
+  #   [folk]    developer/agent vocabulary the book never uses verbatim
+  #             ("leaky abstraction", "god class", "YAGNI") — pure
+  #             folk-term -> book-concept semantic bridging.
+  #   [variant] morphological/compositional variants of book terms
+  #             ("passthrough params", "push complexity down", "errors defined
+  #             away") — tokenization + morphology robustness; FTS5 won't
+  #             bridge these lexically unless the tokenizer stems, so they
+  #             probe whether the vector channel covers the gap.
+  # These skew lexically easy-to-collide, not easy-to-rank: the corpus mentions
+  # the root words everywhere, so the test is whether the CANONICAL passage
+  # outranks passages that merely use the term. Sliceable as a block.
+
+  # -- [folk] --
+  # u18 4.3 definition | folk (also answered by ch5 leakage units)
+  - query: "this API feels like a leaky abstraction"
+    expect_section: "4.3"
+    expect_principle: information-hiding
+  # u67 9 definition | folk
+  - query: "classic god class, it does everything"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u40 6 definition | folk
+  - query: "is this a YAGNI situation or should I build the general version now"
+    expect_principle: general-purpose
+  # u190 20.1 rationale | folk
+  - query: "premature optimization or legitimate design concern"
+    expect_section: "20.1"
+  # u70 9.3 rationale | folk
+  - query: "DRY violation, but deduplicating would need a six-argument helper"
+    expect_section: "9.3"
+  # u57 7.3 red_flag | folk | vocab-pair of "I keep writing wrapper classes..."
+  - query: "wrapper hell, every feature adds another layer of wrapping"
+    expect_section: "7.3"
+    expect_principle: information-hiding
+  # u21 4.6 red_flag | folk | vocab-pair of "team dogma says smaller classes..."
+  - query: "single responsibility taken to the extreme, every class does one tiny thing"
+    expect_section: "4.6"
+    expect_principle: deep-modules
+  # u13 3.4 rationale | folk
+  - query: "the code went full spaghetti, where do we even start"
+    expect_section: "3.4"
+    expect_principle: strategic-programming
+  # u67 9 definition | folk
+  - query: "separation of concerns, where exactly to draw the line"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u114 13.3 definition | folk
+  - query: "magic numbers with no explanation of what they mean"
+    expect_section: "13.3"
+    expect_principle: comments
+  # u11 3.2 definition | folk
+  - query: "when does tech debt actually get paid down"
+    expect_principle: strategic-programming
+
+  # -- [variant] --
+  # u59 7.5 definition | variant ("passthrough" as one token)
+  - query: "passthrough params on every layer"
+    expect_section: "7.5"
+    expect_principle: information-hiding
+  # u16 4.1 definition | variant (deep/shallow as bare adjectives)
+  - query: "deep vs shallow classes, which to prefer and when"
+    expect_principle: deep-modules
+  # u62 8 rationale | variant (push/down vs pull/downward)
+  - query: "push complexity down the stack instead of up to callers"
+    expect_chapter: "8"
+  # u20 4.5 red_flag | variant
+  - query: "my classes are too shallow, how do I deepen them"
+    expect_principle: deep-modules
+  # u28 5.1 definition | variant
+  - query: "info hiding versus just marking the fields private"
+    expect_section: "5.1"
+    expect_principle: information-hiding
+  # u82 10.2 rationale | variant (compressed form of the ch10 principle)
+  - query: "errors defined away instead of thrown"
+    expect_chapter: "10"
+  # u87 10.7 definition | variant (gerund form)
+  - query: "aggregating exception handling high up in the stack"
+    expect_section: "10.7"
+  # u86 10.6 definition | variant
+  - query: "masking errors down low so callers stay oblivious"
+    expect_section: "10.6"
+  # u93 11 definition | variant (scope-of-principle question)
+  - query: "does design it twice apply to small classes or only big systems"
+    expect_chapter: "11"

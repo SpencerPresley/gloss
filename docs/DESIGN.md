@@ -344,6 +344,46 @@ C-speed; stdlib-only portability is a core invariant).
    pressure is still there. If it regresses, the legitimate fix is broader enrichment coverage,
    **not** hand-editing §9.5's metadata to beat the eval case (Goodhart).
 
+### Track D: eval-set expansion — candidates drafted, pending vetting (2026-07-10)
+
+Future-path #1 executed to the candidate stage: **207 candidate cases** in
+`corpora/aposd/cases-candidates.yaml`, in three tranches:
+
+- **Dev-voice (145)**: situation-phrased first-person symptom queries, drafted from 82
+  stratified source units (every chapter ≥1 case, chs 1–20 ≥3; all six principles plus the
+  null-principle chapters; all five unit types) while reading **only** verbatim `text` +
+  chapter/section — never the stored metadata.
+- **Agent-voice (42)**: queries phrased the way the consuming agent actually issues them in
+  the two intended workflows — design iron-out with the skill (prescriptive decision
+  questions, alternatives side by side) and refactor review (third-person descriptions of
+  observed code, concrete identifiers, python/asyncio vocabulary). Drafted **forward**
+  (workflow simulation → query → pin located by reading unit text), which is the realistic
+  direction. Includes 8 deliberate voice-pairs of dev-voice cases (marked) to measure voice
+  robustness.
+- **Vocab (20)**: term-driven queries in two flavors — *folk synonyms* the book never uses
+  verbatim ("leaky abstraction", "god class", "YAGNI": pure folk-term → book-concept
+  bridging) and *variant forms* of book terms ("passthrough params", "push complexity down
+  the stack", "errors defined away": tokenization/morphology robustness). These skew
+  lexically easy-to-collide rather than easy-to-rank: the corpus mentions the root words
+  everywhere, so the test is whether the *canonical* passage outranks passages that merely
+  use the term (the reranker's regression net). A third flavor — exact book terms needing a
+  screen exemption ("shallow module" is in `key_terms` by design) — was considered and
+  **declined** to keep the metadata-overlap guarantee absolute; the query-log path (#2)
+  will capture those with genuine provenance.
+
+Both tranches leakage-screened by `corpora/aposd/screen_candidates.py` (stdlib): zero
+word-4-gram overlap with `questions`/`key_terms`/`context_line`/`applies_when`, plus
+warnings for quoting source text, echoing an existing case, or colliding with another
+candidate (all cleared; exact in-file duplicates are a hard fail). Candidates were **not**
+filtered by what the current system retrieves (anti-Goodhart); admissibility was
+well-posedness only. A simulated merge scores well-formed: 238 cases, 6/6 principles, no
+duplicate queries.
+
+**Not merged into `cases.yaml`** — human vetting first; approved cases land under a
+`# --- synthetic set ... ---` marker so curated-vs-synthetic stays separable. After the
+merge: re-baseline all three modes here (keep the n=31 history above, labeled) and re-run
+every per-track `--vs` comparison — n=31 numbers do not transfer.
+
 ---
 
 ## Status & known limitations (from README + handoffs)

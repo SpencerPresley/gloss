@@ -346,6 +346,7 @@ Measured diagnostics on the embedded corpus (1,493 × 768 vectors):
 | change | eval effect | note |
 |---|---|---|
 | Stopword filter in the lexical OR-expansion | Δmrr +0.004, p=1.00 (one case 5→3) | BM25's IDF already neutralizes function words; a hardcoded English stoplist in a corpus-agnostic engine is a smell anyway. And never strip stopwords before *embedding* — transformer embedders want natural sentences. |
+| Constant query prefix (n=266, hybrid). Short topic prefix "software design issue: " | Δmrr=−0.038, **p=0.018** (31 better / 52 worse) | Anything constant added to a query subtracts contrast: lexically the terms match the whole corpus (noise in BM25's term budget); semantically every query vector is dragged toward the corpus centroid — re-blurring what mean-centering sharpened. Whole-SKILL.md prefix is the degenerate case: at ~5.7k tokens it blows the embedder's 2k window (two unrelated queries → cos 1.0000, identical results) and drowns the lexical signal (same top-5 for any query). Concatenation is not conditioning — the skill's real influence is on query *generation*, which the tranches model; the end-to-end version is a skill-primed rewrite A/B, not a prefix. |
 
 **Ruled out as wrong-scale** (don't relitigate without a much bigger corpus): ANN / graph-ANN /
 HNSW / fuzzy kNN — approximations of the exact brute-force kNN we already do in ~3 ms over 1,493

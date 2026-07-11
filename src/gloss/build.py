@@ -25,9 +25,9 @@ def load_profile(instance: Path):
     return module.APOSD
 
 
-def load_prompt(instance: Path) -> tuple[str, str]:
-    """Split the instance prompt.md into (system, user_template) on the TEMPLATE marker."""
-    text = (Path(instance) / "prompt.md").read_text()
+def load_prompt(instance: Path, filename: str = "prompt.md") -> tuple[str, str]:
+    """Split an instance prompt file into (system, user_template) on the TEMPLATE marker."""
+    text = (Path(instance) / filename).read_text()
     system, template = text.split("<!-- TEMPLATE -->", 1)
     return system.replace("<!-- SYSTEM -->", "").strip(), template.strip()
 

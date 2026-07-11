@@ -46,6 +46,21 @@ def _key(unit: RawUnit) -> str:
     return hashlib.sha1(raw.encode()).hexdigest()[:12]
 
 
+def rows_by_key(checkpoint: Path) -> dict[str, dict]:
+    """Current view of a checkpoint: rows deduped by key, last row wins.
+
+    The append-only supersede mechanism: a resumed success supersedes an earlier
+    failure, and a question top-up row supersedes the original enrichment row.
+    """
+    rows: dict[str, dict] = {}
+    if checkpoint.exists():
+        for line in checkpoint.read_text().splitlines():
+            if line.strip():
+                row = json.loads(line)
+                rows[row["key"]] = row
+    return rows
+
+
 def _done_keys(checkpoint: Path) -> set[str]:
     """Keys already SUCCESSFULLY enriched (needs_enrich == 0), for resume.
 
@@ -130,10 +145,5 @@ def enrich_units(units, section_texts, extractor: StructuredExtractor, *,
                 write(work(unit))
 
     current = {_key(u) for u in units}
-    rows_by_key: dict[str, dict] = {}
-    for line in checkpoint.read_text().splitlines():
-        if line.strip():
-            row = json.loads(line)
-            if row["key"] in current:   # stale rows (older segmentation rules) never ship
-                rows_by_key[row["key"]] = row   # last wins: a resumed success supersedes an earlier failure
-    return list(rows_by_key.values())
+    # Stale rows (older segmentation rules) never ship: filter to the current unit set.
+    return [row for key, row in rows_by_key(checkpoint).items() if key in current]

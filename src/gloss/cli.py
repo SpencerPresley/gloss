@@ -90,6 +90,12 @@ def cmd_build(args) -> None:
               resume=args.resume, workers=args.workers, build_dir=Path(args.build_dir))
 
 
+def cmd_enrich_questions(args) -> None:
+    """Top up checkpoint questions (lazy import: build-only deps stay off the retrieve path)."""
+    from .topup import run_topup
+    run_topup(model=args.model, build_dir=Path(args.build_dir), workers=args.workers)
+
+
 def cmd_embed(args) -> None:
     """Embed every unit into the db's vectors table (needs a running Ollama)."""
     from .vectors import embed_corpus
@@ -207,6 +213,16 @@ def main(argv: list[str] | None = None) -> None:
                    help="root for per-chapter JSONL checkpoints; use a distinct dir per "
                         "model (e.g. build/minimax) so builds don't clobber each other")
     b.set_defaults(func=cmd_build)
+
+    q = sub.add_parser("enrich-questions",
+                       help="append differently-angled retrieval questions to every enriched "
+                            "checkpoint row (widens the semantic net; ship with a build "
+                            "--resume + embed)")
+    q.add_argument("--build-dir", required=True,
+                   help="checkpoint root of the build to top up (e.g. build/minimax-v2)")
+    q.add_argument("--model", default="minimax-m3:cloud")
+    q.add_argument("--workers", type=int, default=1, help="concurrent top-up requests")
+    q.set_defaults(func=cmd_enrich_questions)
 
     e = sub.add_parser("eval", help="score retrieval against eval cases")
     e.add_argument("--db", required=True)

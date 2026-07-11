@@ -24,3 +24,6 @@ resources/*.pdf
 
 # OS
 .DS_Store
+
+# Claude Code worktrees (parallel agent sessions; never version working copies)
+.claude/worktrees/

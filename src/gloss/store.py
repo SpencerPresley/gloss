@@ -67,6 +67,22 @@ def build_db(rows: list[dict], db_path: Path) -> None:
         con.close()
 
 
+def get_unit(db_path: Path, unit_id: int) -> dict | None:
+    """Fetch one unit by id, or None if absent.
+
+    Companion to ``search`` for the compact-output flow: a ``more:`` preview line
+    carries only a paraphrase, so expanding it into the verbatim passage goes
+    through here.
+    """
+    con = sqlite3.connect(db_path)
+    con.row_factory = sqlite3.Row
+    try:
+        row = con.execute("SELECT * FROM units WHERE id = ?", (unit_id,)).fetchone()
+    finally:
+        con.close()
+    return dict(row) if row else None
+
+
 def search(db_path: Path, query: str, k: int = 5,
            principles: list[str] | None = None, types: list[str] | None = None) -> list[dict]:
     """Return up to k units ranked by BM25, with optional metadata filters.

@@ -1,4 +1,4 @@
-from gloss.store import build_db, search, to_match_query
+from gloss.store import build_db, get_unit, search, to_match_query
 
 ROWS = [
     {"text": "A module with a complex interface for little functionality is shallow.",
@@ -33,3 +33,12 @@ def test_search_empty_query_returns_empty(tmp_path):
     db = tmp_path / "aposd.db"
     build_db(ROWS, db)
     assert search(db, "a I", k=3) == []   # all tokens <=2 chars -> no MATCH -> []
+
+
+def test_get_unit(tmp_path):
+    db = tmp_path / "aposd.db"
+    build_db(ROWS, db)
+    unit = get_unit(db, 1)
+    assert unit and unit["section"] == "4.5" and "shallow" in unit["text"]
+    assert unit["applies_when"] == "thin wrapper smell"
+    assert get_unit(db, 999) is None

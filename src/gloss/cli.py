@@ -8,11 +8,11 @@ import argparse
 import json
 from pathlib import Path
 
-from .store import search
+from .store import get_unit, search
 
 
-def _format_hit(hit: dict) -> str:
-    """Render one search hit as a citation header + the verbatim passage.
+def _header(hit: dict) -> str:
+    """Citation + type + channel tags, e.g. ``[deep-modules §4.6 p.45] (red_flag via lex#1+sem#1)``.
 
     Hybrid hits carry per-channel ranks; showing them makes reliability visible:
     ``via lex#2+sem#1`` = two independent signals agree, ``via sem#4`` = one
@@ -22,7 +22,25 @@ def _format_hit(hit: dict) -> str:
     via = ""
     if hit.get("channels"):
         via = " via " + "+".join(f"{name[:3]}#{rank}" for name, rank in hit["channels"].items())
-    return f"[{citation}] ({hit['type']}{via})\n{hit['text']}\n"
+    return f"[{citation}] ({hit['type']}{via})"
+
+
+def _format_hit(hit: dict) -> str:
+    """Render one search hit as a citation header + the verbatim passage."""
+    return f"{_header(hit)}\n{hit['text']}\n"
+
+
+def _format_preview(hit: dict) -> str:
+    """Render a runner-up as one pointer line for --compact output.
+
+    Uses the generated ``context_line`` — a paraphrase, acceptable only because it
+    is labeled as a pointer, never presented as the passage. Expanding it into the
+    verbatim text is ``gloss show <id>``.
+    """
+    line = " ".join((hit.get("context_line") or "").split())
+    if len(line) > 140:
+        line = line[:139].rstrip() + "…"
+    return f"more: id={hit['id']} {_header(hit)} — {line}"
 
 
 def cmd_retrieve(args) -> None:
@@ -46,8 +64,23 @@ def cmd_retrieve(args) -> None:
                       base_url=args.ollama_url, template=template)[:args.k]
     if args.json:
         print(json.dumps(hits, indent=2))
+    elif not hits:
+        print("(no matches)")
+    elif args.compact:
+        print("\n".join([_format_hit(hits[0])] + [_format_preview(h) for h in hits[1:]]))
     else:
-        print("\n".join(_format_hit(h) for h in hits) or "(no matches)")
+        print("\n".join(_format_hit(h) for h in hits))
+
+
+def cmd_show(args) -> None:
+    """Print one unit in full by id — expands a --compact preview line verbatim."""
+    unit = get_unit(Path(args.db), args.id)
+    if unit is None:
+        raise SystemExit(f"gloss show: no unit with id={args.id} in {args.db}")
+    out = _format_hit(unit)
+    if unit.get("applies_when"):
+        out += f"applies when: {unit['applies_when']}\n"
+    print(out)
 
 
 def cmd_build(args) -> None:
@@ -134,6 +167,10 @@ def main(argv: list[str] | None = None) -> None:
     r.add_argument("--principle", action="append")
     r.add_argument("--type", action="append")
     r.add_argument("--json", action="store_true")
+    r.add_argument("--compact", action="store_true",
+                   help="text mode only: full passage for hit #1, one 'more: id=N …' "
+                        "preview line per runner-up (expand with 'gloss show'); "
+                        "--json output is unaffected")
     r.add_argument("--mode", choices=["auto", "lexical", "hybrid", "semantic"], default="auto",
                    help="auto = hybrid when the db has vectors and the embedder is up, "
                         "else lexical (default); hybrid/semantic fail loudly instead of degrading")
@@ -147,6 +184,11 @@ def main(argv: list[str] | None = None) -> None:
                    help="corpus-specific rerank prompt template file with {query}, "
                         "{candidates}, {n} placeholders (default: built-in generic)")
     r.set_defaults(func=cmd_retrieve)
+
+    s = sub.add_parser("show", help="print one unit in full by id (expands a --compact preview)")
+    s.add_argument("id", type=int)
+    s.add_argument("--db", required=True)
+    s.set_defaults(func=cmd_show)
 
     m = sub.add_parser("embed", help="precompute unit vectors into the db (semantic channel)")
     m.add_argument("--db", required=True)

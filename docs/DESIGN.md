@@ -322,6 +322,25 @@ Read of the table:
   judged primarily on the agent-voice and audit slices — that's where the misses live;
   vocab (0.90) and dev-voice (0.69) are near their practical ceilings.
 
+**Query-side finding — skill-primed rewrite A/B (measured 2026-07-10).** Design: 7 fresh
+agents, each given only SKILL.md + a stride-split batch of the 266 raw case queries
+(blind to pins, corpus, and metadata), produced "the query you'd pass to `gloss
+retrieve`" per situation; rewrites scored against the same pins, paired sign-flip vs
+raw, hybrid mode. Result: **hit@1 0.673 → 0.744, Δmrr=+0.053, p=0.0045** (55 better /
+30 worse / 181 same). Per-slice: dev-voice +0.061 (p=0.017), audit hit@1 0.33→0.50,
+agent-voice 0.52→0.60, rough +0.078 (sub-slice p's underpowered at their n); curated
+flat (+0.015, p=0.83 — those were already hand-tuned symptom phrasings). The gain is
+*not* book-vocab injection (the skill forbids that and the rewrites comply) — it's
+expansion of terse/noisy fragments into full, single-concern symptom sentences, which
+the embedder matches far better. Implication, cheapest first: (1) the skill should
+explicitly instruct a pre-query rewrite ("expand the situation into one complete
+symptom sentence before querying") — zero infra, the consuming agent is already an
+LLM; (2) a `--rewrite` step in the retrieval path (Ollama-as-service, same pattern as
+Track B's reranker) if (1) proves insufficient. Caveat: 30/266 got worse, mostly
+over-elaboration of already-good queries — rewrite guidance should say "expand terse
+queries; leave well-formed ones alone." Rewriter was a frontier model; weaker
+rewriters need their own measurement.
+
 Measured diagnostics on the embedded corpus (1,493 × 768 vectors):
 
 - **Anisotropy is large.** Corpus mean-vector norm 0.67; mean pairwise doc-doc cosine 0.45. One

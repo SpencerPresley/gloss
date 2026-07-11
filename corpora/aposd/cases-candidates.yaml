@@ -774,3 +774,147 @@ cases:
   # u93 11 definition | variant (scope-of-principle question)
   - query: "does design it twice apply to small classes or only big systems"
     expect_chapter: "11"
+
+  # ==== rough tranche (2026-07-10): queries as they actually arrive ====
+  # The tranches above are all well-formed prose — which is the same GENRE as
+  # the LLM-generated enrichment questions, even with zero n-gram overlap. Real
+  # queries share neither strings nor genre: terse fragments, framework nouns
+  # and identifiers as noise, multi-concern rambles, typos, informal register.
+  # This tranche estimates the realistic floor; knob changes should not regress
+  # this slice even if they help the clean slices. Roughness stops where
+  # well-posedness ends: every case here still has a defensible expected
+  # passage (or is OR-pinned); truly unanswerable fragments were dropped.
+  # Some are marked rough-pairs of clean cases (same situation, real register).
+
+  # -- terse / underspecified --
+  # u74 9.8 rationale | rough
+  - query: "big function split?"
+    expect_section: "9.8"
+  # u21 4.6 red_flag | rough
+  - query: "too many tiny classes"
+    expect_section: "4.6"
+    expect_principle: deep-modules
+  # u55 7.1 red_flag | rough
+  - query: "pointless passthru layer"
+    expect_section: "7.1"
+    expect_principle: information-hiding
+  # u96 12.2 rationale | rough
+  - query: "comments worth it"
+    expect_principle: comments
+  # u82 10.2 rationale | rough
+  - query: "error handling everywhere ugly"
+    expect_chapter: "10"
+  # u64 8.2 rationale | rough
+  - query: "config sprawl"
+    expect_section: "8.2"
+    expect_principle: general-purpose
+  # u134 14.1 example | rough
+  - query: "naming is hard lol"
+    expect_chapter: "14"
+  # u156 16.1 definition | rough
+  - query: "when to refactor"
+    expect_principle: strategic-programming
+  # u101 13.1 definition | rough
+  - query: "docstrings on private methods?"
+    expect_section: "13.1"
+  # u70 9.3 rationale | rough
+  - query: "duplicate code how much is ok"
+    expect_section: "9.3"
+    expect_principle: deep-modules
+
+  # -- context noise: identifiers, frameworks, pasted-fragment flavor --
+  # u55 7.1 red_flag | rough
+  - query: "UserRepo.save just calls self.db.save and every method in the layer is like this"
+    expect_section: "7.1"
+    expect_principle: information-hiding
+  # u74 9.8 rationale | rough
+  - query: "django view does validation orm calls emailing and template rendering, 400 lines"
+    expect_section: "9.8"
+    expect_principle: deep-modules
+  # u67 9 definition | rough
+  - query: "we have utils.py helpers.py common.py misc.py all doing random stuff"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u169 18 definition | rough
+  - query: "call sites look like save(data, true, false) and nobody can read them"
+    expect_chapter: "18"
+  # u55 7.1 red_flag | rough
+  - query: "fastapi service layer is 1:1 with the repository layer, feels dumb but every tutorial does it"
+    expect_section: "7.1"
+    expect_principle: information-hiding
+  # u59 7.5 definition | rough (prop drilling ~ threading a value through layers)
+  - query: "react component drilling props through 5 levels"
+    expect_section: "7.5"
+    expect_principle: information-hiding
+  # u96 12.2 rationale | rough
+  - query: "TODO comments from 2019 still in the code, half the functions have no docs at all"
+    expect_principle: comments
+  # u182 19.1 definition | rough
+  - query: "our BaseManager class has 40 methods, subclasses use maybe 3"
+    expect_section: "19.1"
+    expect_principle: deep-modules
+
+  # -- multi-concern rambles (pinned to the dominant concern, OR where honest) --
+  # u59 7.5 definition | rough
+  - query: "this module has a config dict passed into everything, methods that just forward to other methods, and zero comments — where do i even start"
+    expect_section: "7.5"
+    expect_principle: information-hiding
+  # u4 2.1 definition | rough
+  - query: "inherited a 3k line file, functions call each other in a web, renaming anything breaks something somewhere"
+    expect_principle: complexity
+  # u5 2.2 definition | rough | rough-pair of "a small change forces edits in many unrelated places"
+  - query: "small tweak took 3 days because i had to touch 9 files and then 2 broke in prod"
+    expect_section: "2.2"
+    expect_principle: complexity
+  # u29 5.2 definition | rough
+  - query: "new feature means touching the parser the store and the cli, they all know each others formats"
+    expect_principle: information-hiding
+
+  # -- typos / informal register --
+  # u67 9 definition | rough | rough-pair of "should I split this big class into several smaller classes"
+  - query: "shoud i split this calss into two"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u95 12.1 rationale | rough | rough-pair of "if good code explains itself why should I write comments at all"
+  - query: "y comment readable code"
+    expect_principle: comments
+  # u169 18 definition | rough
+  - query: "wat makes code obvius vs not"
+    expect_chapter: "18"
+
+  # -- wrong-altitude: task-level asks, principle-level answers --
+  # u156 16.1 definition | rough
+  - query: "cleaning up a 2000 line file where do i start"
+    expect_principle: strategic-programming
+  # u156 16.1 definition | rough
+  - query: "new to this codebase how do i not make it worse"
+    expect_principle: strategic-programming
+
+  # ==== audit tranche (2026-07-10): artifact-property sweeps ====
+  # Register: reviewing an artifact (a CLI's options, an API surface, a tool's
+  # error modes) against the book. Neither symptom assertion nor A/B decision —
+  # the query names a property and asks the CONDITIONAL judgment: is this a
+  # smell, and when is it legitimate? Phrased generalized (no project-specific
+  # nouns) because the querying agent generalizes before searching.
+
+  # u64 8.2 rationale | audit
+  - query: "are config options a smell or sometimes legitimate"
+    expect_section: "8.2"
+    expect_principle: general-purpose
+  # u64 8.2 rationale | audit
+  - query: "auditing a cli's flags and options, what should design review look for"
+    expect_section: "8.2"
+    expect_principle: general-purpose
+  # u22 4.7 red_flag | audit
+  - query: "options nobody uses but we're afraid to remove"
+    expect_section: "4.7"
+  # u64 8.2 rationale | audit
+  - query: "when is exposing a tunable justified versus picking a value internally"
+    expect_section: "8.2"
+  # u21 4.6 red_flag | audit
+  - query: "is a sprawling tree of subcommands each doing one small thing a problem"
+    expect_section: "4.6"
+    expect_principle: deep-modules
+  # u82 10.2 rationale | audit
+  - query: "how many distinct failure modes should a tool surface to its users"
+    expect_chapter: "10"

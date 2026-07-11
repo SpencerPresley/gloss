@@ -346,8 +346,8 @@ C-speed; stdlib-only portability is a core invariant).
 
 ### Track D: eval-set expansion — candidates drafted, pending vetting (2026-07-10)
 
-Future-path #1 executed to the candidate stage: **207 candidate cases** in
-`corpora/aposd/cases-candidates.yaml`, in three tranches:
+Future-path #1 executed to the candidate stage: **240 candidate cases** in
+`corpora/aposd/cases-candidates.yaml`, in five tranches:
 
 - **Dev-voice (145)**: situation-phrased first-person symptom queries, drafted from 82
   stratified source units (every chapter ≥1 case, chs 1–20 ≥3; all six principles plus the
@@ -370,13 +370,26 @@ Future-path #1 executed to the candidate stage: **207 candidate cases** in
   screen exemption ("shallow module" is in `key_terms` by design) — was considered and
   **declined** to keep the metadata-overlap guarantee absolute; the query-log path (#2)
   will capture those with genuine provenance.
+- **Rough (27)**: queries as they actually arrive — terse fragments ("big function
+  split?"), framework/identifier noise ("react component drilling props through 5
+  levels"), multi-concern rambles, typos, wrong-altitude asks. Rationale: the tranches
+  above are all well-formed prose, which is the same *genre* as the LLM-generated
+  enrichment questions even at zero n-gram overlap — a stylistic alignment the string
+  screen cannot catch, so clean-tranche scores likely overestimate real use. This slice
+  estimates the realistic floor; knob changes should not regress it even when they help
+  the clean slices. Roughness stops where well-posedness ends — every case still has a
+  defensible pin; unanswerable fragments ("is this bad") were dropped as inadmissible.
+- **Audit (6)**: artifact-property sweeps — reviewing a tool's option surface / API /
+  error modes against the book, asking the *conditional* judgment ("are config options a
+  smell or sometimes legitimate"). Phrased generalized: the querying agent strips
+  project-specific nouns before searching.
 
-Both tranches leakage-screened by `corpora/aposd/screen_candidates.py` (stdlib): zero
+All tranches leakage-screened by `corpora/aposd/screen_candidates.py` (stdlib): zero
 word-4-gram overlap with `questions`/`key_terms`/`context_line`/`applies_when`, plus
 warnings for quoting source text, echoing an existing case, or colliding with another
 candidate (all cleared; exact in-file duplicates are a hard fail). Candidates were **not**
 filtered by what the current system retrieves (anti-Goodhart); admissibility was
-well-posedness only. A simulated merge scores well-formed: 238 cases, 6/6 principles, no
+well-posedness only. A simulated merge scores well-formed: 271 cases, 6/6 principles, no
 duplicate queries.
 
 **Not merged into `cases.yaml`** — human vetting first; approved cases land under a

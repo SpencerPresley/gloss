@@ -1,7 +1,15 @@
 # Eval cases for the full APOSD corpus. Symptom-phrased (how a developer describes
 # their own code), seeded from the skill's Quick-Diagnostic + Common-Mistakes and
 # spanning all six coarse principles. expect_principle is robust to section drift;
-# a few expect_section cases pin known passages. Refine after the full build.
+# expect_section / expect_chapter pin known passages — required for the
+# null-principle chapters (10, 11, 14, 17-21), which the principle facet can't reach.
+#
+# Scored by evalrun.py as hit@k, hit@1, and MRR (rank-sensitive: right answer at #3
+# is not the same as at #1).
+#
+# Leakage rule: never copy a stored `questions` string from the db into a case —
+# those strings are indexed (and embedded), so grading on them grades the index on
+# its own training data. Write fresh phrasings.
 cases:
   # deep-modules
   - query: "this small class just forwards calls to another class and adds almost nothing"
@@ -20,8 +28,12 @@ cases:
   # general-purpose
   - query: "should I make this API general purpose or special purpose"
     expect_principle: general-purpose
+  # The Special-General Mixture red flag passage lives in ch9 (§9.5), which the
+  # taxonomy maps to deep-modules — the principle pin alone can't see it. Either
+  # that passage or the ch6 general-purpose discussion answers the symptom.
   - query: "I added a boolean flag to handle one special case"
     expect_principle: general-purpose
+    expect_section: "9.5"
   - query: "this method is named after the one caller that uses it"
     expect_principle: general-purpose
   - query: "general-purpose text editor changePosition method"
@@ -41,3 +53,48 @@ cases:
     expect_principle: strategic-programming
   - query: "is getting the code working enough or should I invest in design"
     expect_principle: strategic-programming
+
+  # --- situation-phrased additions (2026-07-10), for the hybrid-retrieval work.
+  # The first three are regression anchors from live probing an external session ran
+  # against the minimax corpus; the try/catch case reproduced a ranking failure
+  # (right passage at #3 behind a common-word collision on "messy").
+  - query: "should I add a boolean flag to change behavior for one specific caller"
+    expect_principle: general-purpose
+    expect_section: "9.5"
+  - query: "I keep having to wrap every call in try/catch and it's making the code messy"
+    expect_section: "10.7"
+  - query: "when handling an awkward edge case should the caller deal with it or should the module handle it internally"
+    expect_chapter: "8"
+  # errors / exceptions (ch10 is principle-null; chapter pin only)
+  - query: "my method throws exceptions for every little edge case and callers have to handle them all"
+    expect_chapter: "10"
+  # information-hiding
+  - query: "every time I change the file format code in one module I also have to update another module"
+    expect_principle: information-hiding
+  - query: "callers need to know we store items in a sorted array to use this API correctly"
+    expect_principle: information-hiding
+  # naming (ch14 is principle-null)
+  - query: "I can't come up with a clear name for this variable, is that telling me something"
+    expect_chapter: "14"
+  # comments
+  - query: "we only write the documentation after all the code is finished and reviewed"
+    expect_principle: comments
+  - query: "if good code explains itself why should I write comments at all"
+    expect_principle: comments
+  # deep-modules
+  - query: "adding a tiny feature meant creating three new classes and two interfaces"
+    expect_principle: deep-modules
+  - query: "should two small classes that are always used together be merged into one"
+    expect_principle: deep-modules
+  # strategic-programming
+  - query: "my teammate ships features fast but every one leaves a mess someone else cleans up"
+    expect_principle: strategic-programming
+  # general-purpose (configuration, ch8 folds here)
+  - query: "our library has dozens of configuration options and nobody knows what to set them to"
+    expect_principle: general-purpose
+  # complexity
+  - query: "this bug happens because two far-apart pieces of code have to agree and nothing enforces it"
+    expect_principle: complexity
+  # design-it-twice (ch11 is principle-null)
+  - query: "should I consider more than one design before I start coding"
+    expect_chapter: "11"

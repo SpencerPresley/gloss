@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from gloss.store import build_db
 from gloss.evalrun import score_cases
 
@@ -28,6 +30,40 @@ def test_score_cases_miss(tmp_path):
     assert score_cases(db, cases, k=3)["hit_rate"] == 0.0
 
 
+def test_rank_metrics_via_injected_search():
+    """hit1/mrr are rank-sensitive; hit_rate keeps its anywhere-in-top-k meaning."""
+    fake_results = [
+        {"section": "1.1", "chapter": "1", "principle": "complexity"},
+        {"section": "10.7", "chapter": "10", "principle": ""},
+    ]
+    cases = [
+        {"query": "a", "expect_section": "10.7"},      # rank 2
+        {"query": "b", "expect_chapter": "1"},         # rank 1
+        {"query": "c", "expect_principle": "nope"},    # miss
+    ]
+    out = score_cases(Path("unused.db"), cases, k=5,
+                      search_fn=lambda db, q, k=5: fake_results)
+    assert out["hit_rate"] == 2 / 3
+    assert out["hit1"] == 1 / 3
+    assert abs(out["mrr"] - (0.5 + 1.0) / 3) < 1e-9
+    assert out["ranks"] == [2, 1, None]
+
+
+def test_paired_sign_flip():
+    from gloss.evalrun import paired_sign_flip
+    # identical rankings -> zero delta, p = 1.0
+    delta, p = paired_sign_flip([1, 2, None], [1, 2, None])
+    assert delta == 0.0 and p == 1.0
+    # A always #1 where B always misses -> delta 1.0, p = 2^-n (all-same-sign flips)
+    delta, p = paired_sign_flip([1] * 8, [None] * 8)
+    assert delta == 1.0
+    assert abs(p - 2 * (0.5 ** 8)) < 0.01     # two-sided: all-plus or all-minus
+    # antisymmetric
+    d_ab, p_ab = paired_sign_flip([1, 3, None, 2], [2, 1, 4, None])
+    d_ba, p_ba = paired_sign_flip([2, 1, 4, None], [1, 3, None, 2])
+    assert abs(d_ab + d_ba) < 1e-12 and p_ab == p_ba
+
+
 def test_cases_span_principles_and_are_wellformed():
     import yaml
     cases = yaml.safe_load(open("corpora/aposd/cases.yaml"))["cases"]
@@ -37,7 +73,7 @@ def test_cases_span_principles_and_are_wellformed():
     seen = set()
     for c in cases:
         assert "query" in c
-        assert ("expect_principle" in c) or ("expect_section" in c)
+        assert ("expect_principle" in c) or ("expect_section" in c) or ("expect_chapter" in c)
         if c.get("expect_principle"):
             assert c["expect_principle"] in principles
             seen.add(c["expect_principle"])

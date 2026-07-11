@@ -49,14 +49,43 @@ CPU arch / SQLite version, so deploying = copy the file; it's built once, never 
 > pure-Python BM25 over the same `units` table is a drop-in fallback — FTS5 is only an index, all
 > data lives in the plain `units` table. (spec §11, §14)
 
-### 2. Lexical (BM25) first, not embeddings
+### 2. Lexical (BM25) core, hybrid vector channel added on evidence (2026-07-10)
 
-Retrieval is BM25 + metadata filter, not a vector database. At one-book scale exact search is
-sub-millisecond anyway; the embedder — not the math — is the cost and the *portability tax* (it would
-break the zero-install query path). Vectors are kept as an *optional, pluggable* rerank backend
-(precomputed unit vectors could live as a BLOB in the same `.db`, behind a lazily-imported
-`rerank(query, candidates)` hook defaulting to identity), added only if eval shows lexical recall is
-insufficient. (spec §2, §15)
+Retrieval began as BM25 + metadata filter only, with vectors reserved as an optional backend "added
+only if eval shows lexical recall is insufficient" (spec §2, §15). That evidence arrived: live
+probing (an external session querying the corpus cold) reproduced the predicted failure class — a
+situation-phrased query ("wrap every call in try/catch… messy") whose correct passage (§10.7
+exception aggregation) ranked #3 behind a common-word collision on "messy", unfilterably. The eval
+set was extended to 31 rank-sensitive cases first; lexical scored hit@5=0.84 / hit@1=0.55 / MRR=0.66
+on the fixed-segmentation corpus.
+
+The channel that was added differs from the reserved design in one important way: **parallel
+channels fused with RRF, not a rerank hook** — a reranker over BM25's candidates can't recover a
+passage BM25 never surfaced (a recall failure), only reorder ranking failures. Shape:
+
+- `gloss embed` post-pass: per-unit vectors (a *gist* of the generated metadata, one vector **per
+  generated question** — doc2query made dense, so a query matches a question by meaning rather than
+  shared tokens — and chunked verbatim text) stored as float32 BLOBs in the **same** `.db`
+  (embeddinggemma via local Ollama, 768-dim, ~1.5k vectors, ~16s, +5 MB).
+- Query time: BM25 and max-cosine run as independent channels; reciprocal rank fusion promotes
+  units both like, with **rrf_k=20** rather than the literature's 60 — that constant was sized for
+  web-scale lists, and on a ~200-unit corpus it over-smooths: a common-word query gives dozens of
+  units mediocre dual-channel ranks that sum past one channel's emphatic #1 (observed with ch11's
+  unit at semantic #1, 0.69-vs-0.59 cliff, diluted out of top-5 at rrf_k=60).
+- Every hybrid hit carries per-channel ranks (`via lex#1+sem#2`). The channels' errors are
+  decorrelated (BM25 misses vocabulary, vectors miss terse exact-term queries), so agreement is a
+  *visible* confidence signal — this directly answers the live-probe critique that the tool was
+  "unreliable in a way that's invisible at query time".
+
+Result: hybrid hit@5=0.94 / hit@1=0.71 / MRR=0.80 (vs 0.77/0.52/0.60 where the session started;
+the hit@1 jump from 0.61 came from mean-centering the vectors — see the experiment log below).
+What the original decision protected survives intact: packages stay stdlib-only; the *lexical* path
+still needs nothing installed or running; the portability tax is confined to an optional mode that
+degrades back to lexical (silently for a vector-less db, with a stderr note when vectors exist but
+the embedder is down); and vectors travel inside the one portable file. Deliberately refused:
+query-time LLM rerank, ANN/vector-db dependencies (brute-force `math.sumprod` over ~1.5k vectors is
+milliseconds), and query expansion. (spec §2, §15; `store.py`, `vectors.py`; eval numbers in
+BUILDS.md)
 
 ### 3. Deterministic segmentation; the LLM only generates retrieval metadata
 
@@ -65,6 +94,15 @@ touches the returned text. It only *classifies* (`type`, originally `principle`)
 retrieval fields (`context_line`, `questions`, `key_terms`, `applies_when`). Consequence:
 what comes back is always the source's own words — provenance and zero hallucination on what's shown —
 and a weak model degrades *recall*, not the correctness of returned text. (spec §5, §6.2, §9; README "How it works")
+
+> **Boundary rule amended 2026-07-10: code travels with its lead-in prose.** Originally every code
+> block was its own unit, which returned examples stripped of the sentence that explains them — a
+> book's code is not usable in isolation — and let inline code spans the parser misread as blocks
+> shatter sentences into fragments (a real unit whose entire text was "The"). Now a code block merges
+> into the prose run that introduces it (prose after the block starts fresh), and a one-line
+> code element with no code punctuation folds back into the sentence. 257 units became 197; the
+> checkpoint keys (`sha1(section|is_code|text)`) meant only the 59 changed units re-enriched.
+> Boundaries remain fully deterministic. (`segment.py`; census + eval delta in BUILDS.md)
 
 ### 4. Generated fields exist to lift *lexical* recall, indexed separately
 
@@ -80,6 +118,13 @@ They are indexed in **separate FTS5 columns** so they raise recall without dilut
 are factoid-specific and break on the multi-hop reasoning that design arguments require), and kept
 **short** (BM25 term-frequency saturation + length normalization penalize keyword stuffing).
 (spec §5, §14; note `corpus-generation-prompts.md` §2)
+
+> Since the hybrid channel (2026-07-10), the same generated fields do double duty: the gist
+> (`context_line` + `applies_when` + `key_terms`) is embedded as one vector and each question as its
+> own vector — live probing showed a generated question lexically anticipating a query was the
+> single strongest situation-matcher, and per-question embeddings generalize exactly that mechanism
+> to paraphrases with zero shared tokens. `questions` is stored newline-joined so the boundaries
+> survive. (`vectors.py:_unit_jobs`)
 
 ### 5. The `StructuredExtractor` seam — provider decoupling + testability
 
@@ -226,20 +271,101 @@ APOSD instance stays `corpora/aposd/` and its artifact `aposd.db` regardless.
 
 ---
 
+## Retrieval experiment log (2026-07-10)
+
+Every knob change goes through `corpora/aposd/cases.yaml` (n=31) and, since this session,
+`gloss eval --mode A --vs B` — a paired sign-flip randomization test on per-case reciprocal rank
+(`evalrun.py:paired_sign_flip`). House rule: **one case ≈ 3 points, so a delta under ~2 cases is
+noise no matter how good the story is** — adopt on p-value, or on measured mechanism + zero
+regressions, and record which.
+
+Measured diagnostics on the embedded corpus (1,493 × 768 vectors):
+
+- **Anisotropy is large.** Corpus mean-vector norm 0.67; mean pairwise doc-doc cosine 0.45. One
+  book plus a shared instruction prefix puts a big common direction under every similarity,
+  compressing contrast.
+- **Question vectors carry the semantic channel**: they win the per-unit max-sim for ~80% of
+  top-5 hits (gist ~8%, text chunks ~12%) — dense doc2query is the load-bearing piece.
+- **Hubness and max-sim multiplicity are mild**: the worst hub unit appears in 4/31 top-5s;
+  #vectors-per-unit vs top-5 appearances correlates at r=0.15. No correction warranted at this
+  corpus size.
+
+**Adopted:**
+
+| change | eval effect | verdict basis |
+|---|---|---|
+| Mean-centering ("all-but-the-top" k=1): docs centered+renormalized at embed, mean stored in `vectors_meta.center_vec`, query centered identically | hybrid hit@1 0.61→0.71, MRR 0.74→0.80; centered-vs-raw is 3 better / **0 worse** / 28 unchanged (p=0.25 alone); pushed hybrid-vs-lexical from p=0.27 to **p=0.037** | measured mechanism + strictly monotone improvement; standard practice (*all-but-the-top*, Mu & Viswanath 2018) |
+| rrf_k=20 (vs the literature's 60) | +1 case hit@5, nothing worse | mechanism (short-list dilution, §2), explicitly *not* a p-value |
+
+**Rejected after measurement:**
+
+| change | eval effect | note |
+|---|---|---|
+| Stopword filter in the lexical OR-expansion | Δmrr +0.004, p=1.00 (one case 5→3) | BM25's IDF already neutralizes function words; a hardcoded English stoplist in a corpus-agnostic engine is a smell anyway. And never strip stopwords before *embedding* — transformer embedders want natural sentences. |
+
+**Ruled out as wrong-scale** (don't relitigate without a much bigger corpus): ANN / graph-ANN /
+HNSW / fuzzy kNN — approximations of the exact brute-force kNN we already do in ~3 ms over 1,493
+vectors, so they can only add error; vectorized beam search (nothing to prune); HashingVectorizer
+(approximate TF; real BM25 already here); word mover's distance (superseded by sentence
+embeddings, heavy); hyperbolic/Poincaré embeddings (no pretrained text encoder to drop in; built
+for hierarchy learning); full Mahalanobis (needs n ≫ 768 for the covariance — its useful low-rank
+cousin *is* the centering above); numpy/scikit-learn on the query path (`math.sumprod` is already
+C-speed; stdlib-only portability is a core invariant).
+
+**Future paths, roughly in order:**
+
+1. **Eval-set expansion — the keystone.** 31 → ~150–300 cases (curated + synthetic situation
+   paraphrases generated from unit *text* by an LLM that never sees the stored `questions`;
+   keep the synthetic set separately labeled — its generator bias correlates with our
+   enrichment). Everything below is underpowered until this lands. Even hybrid-vs-lexical
+   only reached p=0.037 after centering; per-knob deltas mostly can't be certified at n=31.
+2. **Interface pack.** `--match raw` passthrough to FTS5's native query syntax (AND/OR/NOT,
+   "phrases", NEAR(), `key_terms:` column filters, `&&`/`||` sugar); `--explain` per hit
+   (winning channel, vector kind — gist/question #i/text chunk — and the matched question
+   text); `gloss facets` vocabulary dump; result filters `--cliff <frac-of-top>`,
+   `--require-agreement`, `--min-sem <cos>` (no absolute RRF threshold — fused scores aren't
+   comparable across queries). Doubles as the query-log source for #1.
+3. **Learned fusion, only after #1.** Tiny learning-to-rank: logistic regression / coordinate
+   ascent over (bm25 rank, cosine, channel agreement, unit length) with leave-one-out CV.
+   ~8 parameters want ~200+ cases. Not LambdaMART/boosting — capacity must match data.
+4. **Deeper isotropy work if evidence demands**: remove top 2–5 principal components (power
+   iteration, stdlib) instead of k=1; CSLS-style local scaling if hubness grows with corpus
+   size.
+5. **Agreement-gated pseudo-relevance feedback** — query expansion only when both channels
+   agree on #1. Unguarded PRF drifts on the ~30% of queries whose #1 is wrong, and the current
+   headroom is precision-at-#1, which expansion doesn't fix. Low priority.
+6. **Watch item (was the known miss):** "boolean flag for one specific caller" ranked the
+   §14.3 boolean-*naming* distractor above the §9.5 special-general-mixture red flag until
+   centering; post-centering §9.5 is #1 with the distractors at #2–3, so the surface-similarity
+   pressure is still there. If it regresses, the legitimate fix is broader enrichment coverage,
+   **not** hand-editing §9.5's metadata to beat the eval case (Goodhart).
+
+---
+
 ## Status & known limitations (from README + handoffs)
 
 gloss is **early** and a **working prototype, not a finished product**. The full APOSD corpus builds
-end-to-end and retrieval returns sensible cited passages, but:
+end-to-end, hybrid retrieval scores hit@5=0.94 / hit@1=0.71 / MRR=0.80 on the eval set, but:
 
-- The eval set is **16 cases** — too thin to confidently lock a build model. Strengthening it
-  (section-level, cross-principle, disambiguated cases) is the top follow-up.
-- Real-world usefulness **hasn't been battle-tested**.
-- BM25 column weights (`_WEIGHTS` in `store.py`) are untuned defaults, to be tuned on a stronger eval.
+- The eval set is **31 cases** (16 original + 15 situation-phrased, including three regression
+  anchors from live probing). Better than 16, still small — one case ≈ 3 points, so treat deltas
+  under ~2 cases as noise. Never copy a stored `questions` string into a case (that grades the
+  index on its own training data).
+- Real-world usefulness **hasn't been battle-tested** beyond one external live-probe session.
+- BM25 `_WEIGHTS` remain untuned defaults; the RRF constant and pool were swept once (rrf_k 20/60/100
+  × pool 30/50/100 — flat except the rrf_k=20 top-rank effect, see §2).
+- Known ranking miss: "boolean flag for one specific caller" surfaces a §14.3 boolean-*naming*
+  passage above the §9.5 special-general-mixture red flag (both channels like the distractor's
+  surface). In top-3, not #1.
+- Chapters with no level-2 headings still collapse to one prose unit (ch11 = one 6.9k-char unit).
+  Chunked text vectors make it *findable* now, but it returns as a wall of text; paragraph-aware
+  splitting (the parser emits per-PDF-line paras, so true paragraph boundaries need indent
+  detection) is the natural next boundary improvement.
 - The redundant LLM `principle` field should be dropped (generated then always overridden, §8 above).
 - The FTS trigger is insert-only (assumes wholesale rebuild); incremental writes would need
   UPDATE/DELETE triggers.
-- Chapters with no level-2 headings collapse to one prose unit (text still searchable; sub-splitting
-  long runs is a deliberate-for-now non-goal).
+- Vectors don't survive `gloss build` (the db file is overwritten) — re-run `gloss embed`. An
+  embed-if-vectors-existed convenience is a possible follow-up.
 
 (README status line; `notes/2026-06-10-full-book-build-handoff.md` "Known gaps")
 
@@ -247,7 +373,8 @@ end-to-end and retrieval returns sensible cited passages, but:
 
 ## Explicit non-goals (YAGNI)
 
-From spec §2 — gloss is deliberately **not**: a vector database as the core (vectors are optional
-rerank only); a conversational RAG Q&A bot; an OCR pipeline (the full book has a clean text layer; the
-20-page vector-outline extract is out of scope); an agentic build harness (the build is a
+From spec §2 — gloss is deliberately **not**: a vector database as the core (vectors are an
+optional second channel in the same SQLite file — never the required path, never a separate store,
+no ANN library); a conversational RAG Q&A bot; an OCR pipeline (the full book has a clean text
+layer; the 20-page vector-outline extract is out of scope); an agentic build harness (the build is a
 deterministic structured-output pass).

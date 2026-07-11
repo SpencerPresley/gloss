@@ -1,7 +1,10 @@
 # gloss
 
-Turn a source text into a small, portable, **cited** corpus you can search by lexical query and
+Turn a source text into a small, portable, **cited** corpus you can search by free-text query and
 metadata — and get back the source's *actual passages*, with citations, instead of a paraphrase.
+Retrieval is hybrid: FTS5/BM25 plus an optional local-embedding channel, fused by reciprocal rank
+fusion, with each hit tagged by which channels ranked it (two agreeing channels = a hit you can
+trust).
 
 `gloss` splits into a corpus-agnostic **engine** (`src/gloss/`) and per-book **instances**
 (`corpora/<name>/`). The first — and so far only — instance is John Ousterhout's
@@ -9,19 +12,25 @@ metadata — and get back the source's *actual passages*, with citations, instea
 skill, surfacing the book's own words and examples on demand.
 
 > **Status:** early; `gloss` is a working title. It builds the full APOSD corpus end-to-end and
-> retrieval returns sensible cited passages, but the eval set is small (16 cases) and real-world
+> hybrid retrieval scores hit@5=0.94 / hit@1=0.71 / MRR=0.80 on a 31-case eval, but real-world
 > usefulness hasn't been battle-tested. Treat it as a working prototype, not a finished product.
 
 ## How it works
 
-Two phases, one portable artifact:
+Two phases (plus an optional embed pass), one portable artifact:
 
 - **Build** (offline, once, needs a model): PyMuPDF font-aware parse → deterministic unit
-  segmentation (verbatim text is fixed here, never LLM-rewritten) → per-unit LLM enrichment
-  (retrieval metadata: a context line, symptom-phrased questions, key terms) → a single
-  SQLite/FTS5 `.db`. Checkpointed, resumable, and concurrent.
-- **Query** (repeated, zero dependencies): FTS5 BM25 + metadata filter over that file.
-  **Stdlib-only** — copy the `.db` plus one script anywhere Python runs; nothing to install.
+  segmentation (verbatim text is fixed here, never LLM-rewritten; code blocks travel with the
+  prose that introduces them) → per-unit LLM enrichment (retrieval metadata: a context line,
+  symptom-phrased questions, key terms) → a single SQLite/FTS5 `.db`. Checkpointed, resumable,
+  and concurrent.
+- **Embed** (offline, optional, ~16s): `gloss embed` writes per-unit vectors — a metadata gist,
+  one vector per generated question, chunked verbatim text — into the *same* `.db`, via a local
+  Ollama embedding model (`embeddinggemma`).
+- **Query** (repeated): BM25 and vector max-similarity as independent channels, fused with
+  reciprocal rank fusion; every hit shows its per-channel ranks (`via lex#1+sem#2`).
+  **Stdlib-only packages** — lexical mode needs literally nothing installed or running; hybrid
+  needs only the local Ollama service, and degrades back to lexical without it.
 
 Boundaries and verbatim text are deterministic; the LLM only classifies and generates retrieval
 fields, so what comes back is always the source's own words.
@@ -33,14 +42,18 @@ fields, so what comes back is always the source's own words.
 uv run --extra build pytest -q
 
 # Build a corpus (needs the source PDF locally + an Ollama model — neither is included):
-uv run --extra build gloss build --model <model> --workers 8 --db build/<model>.db
+uv run --extra build gloss build --model <model> --workers 8 \
+    --db build/<model>.db --build-dir build/<model>
 
-# Retrieve (stdlib-only — no extras):
-uv run gloss retrieve "should I make this API general purpose" --db build/minimax.db -k 3 \
-    [--principle general-purpose] [--type red_flag] [--json]
+# Embed it for hybrid retrieval (stdlib-only; needs local Ollama + embeddinggemma):
+uv run gloss embed --db build/minimax-v2.db
 
-# Eval — top-k hit-rate over corpora/<name>/cases.yaml:
-uv run --extra build gloss eval --db build/minimax.db
+# Retrieve (stdlib-only — no extras; hybrid when embedded, lexical otherwise):
+uv run gloss retrieve "should I make this API general purpose" --db build/minimax-v2.db -k 3 \
+    [--principle general-purpose] [--type red_flag] [--json] [--mode lexical|hybrid|semantic]
+
+# Eval — hit@k / hit@1 / MRR over corpora/<name>/cases.yaml:
+uv run --extra build gloss eval --db build/minimax-v2.db --mode hybrid
 ```
 
 ## Layout

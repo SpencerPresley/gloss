@@ -33,10 +33,10 @@ the repo root: several tests open `corpora/aposd/...` by **relative** path
 
 | Condition | Result |
 | --- | --- |
-| Corpus PDF present (this machine) | `43 passed` in ~10s |
-| Corpus PDF absent (`APOSD_CORPUS=/nonexistent`) | `34 passed, 9 skipped` in ~3s |
+| Corpus PDF present (this machine) | `59 passed` in ~8s |
+| Corpus PDF absent (`APOSD_CORPUS=/nonexistent`) | `50 passed, 9 skipped` in ~3s |
 
-43 tests total. The 5 warnings are SwigPy/`fitz` `DeprecationWarning`s from
+59 tests total. The 5 warnings are SwigPy/`fitz` `DeprecationWarning`s from
 importing pymupdf, unrelated to gloss.
 
 ## File layout
@@ -45,14 +45,15 @@ importing pymupdf, unrelated to gloss.
 | --- | --- | --- |
 | `tests/conftest.py` | — | The shared `corpus_path` fixture (PDF path + skip) |
 | `tests/test_parse.py` | 3 | Font classification; PDF → ordered `Element`s (headings/code/para/figure) |
-| `tests/test_segment.py` | 8 | `Element`s → `RawUnit`s; section text; chapter splitting/boundaries |
-| `tests/test_enrich.py` | 8 | `enrich_units` checkpointing, resume, code-type forcing, failure flagging, concurrency |
+| `tests/test_segment.py` | 11 | `Element`s → `RawUnit`s; code-attach + inline-span-heal rules; section text; chapter splitting/boundaries |
+| `tests/test_enrich.py` | 9 | `enrich_units` checkpointing, resume, stale-row filtering, code-type forcing, failure flagging, concurrency |
 | `tests/test_extract.py` | 4 | `StubExtractor`; `OllamaExtractor` method auto-discovery/pinning/override/failure |
 | `tests/test_taxonomy.py` | 3 | YAML load; `principle_for_chapter`; `card_for` rendering; real-taxonomy integrity |
 | `tests/test_build.py` | 8 | `load_prompt`/`load_profile`/`estimate_num_ctx`; full `run_build` via stub |
 | `tests/test_store.py` | 3 | FTS5 build/search, principle filter, MATCH-query rewrite |
+| `tests/test_vectors.py` | 10 | Embed/pack/chunk; mean-centering + uncentered-index back-compat; semantic match by meaning; RRF fusion + channel tags; filter pass-through; loud-fail vs auto-degrade |
 | `tests/test_cli.py` | 2 | `gloss retrieve` end-to-end via subprocess (JSON + no-match) |
-| `tests/test_eval.py` | 3 | `score_cases` hit/miss; `cases.yaml` well-formedness/coverage |
+| `tests/test_eval.py` | 5 | `score_cases` hit/miss; rank metrics (hit@1/MRR) via injected search; `paired_sign_flip` properties; `cases.yaml` well-formedness/coverage |
 | `tests/test_stdlib_contract.py` | 1 | Query path imports pull in **no** build-only dependency |
 
 `tests/__init__.py` is empty (package marker).
@@ -88,6 +89,17 @@ chat model; tests pass a `_FakeChat` so `OllamaExtractor`'s real logic
 network. `tests/test_extract.py:33` asserts it probes `json_schema` then falls
 back to `function_calling` and pins it; `tests/test_enrich.py:120` uses the
 factory to prove the chat is built exactly once before the worker pool starts.
+
+## The embed_fn seam (vector channel)
+
+`vectors.py` mirrors the extractor pattern one level down: every entry point
+(`embed_corpus`, `search_semantic`, `search_hybrid`, `search_auto`) takes an
+optional `embed_fn(texts) -> list[vector]`, defaulting to the real Ollama HTTP
+call. `tests/test_vectors.py` injects a deterministic keyword→axis fake (cat
+words on one axis, engine words on another) so cosine behaves *semantically* —
+the suite asserts a query with **zero** token overlap still retrieves the right
+unit, that document/query instruction prefixes are applied on the right sides,
+and that fusion tags per-channel ranks. No Ollama, no network, anywhere.
 
 ## Parsing/segmentation without a PDF
 
@@ -146,7 +158,12 @@ docs/STARTUP_GUIDE.md).
 - **Query path stays stdlib-only:** asserted in a *fresh interpreter*
   subprocess so unrelated test imports don't pollute `sys.modules`
   (`tests/test_stdlib_contract.py:14`); the guarded modules are pymupdf, fitz,
-  langchain, langchain_ollama, pydantic, yaml.
+  langchain, langchain_ollama, pydantic, yaml — and the import set now includes
+  `gloss.vectors`, so the semantic channel is held to the same contract.
+- **The semantic channel degrades, never blocks:** explicit hybrid mode raises
+  `VectorsUnavailable` on a vector-less db; `search_auto` returns lexical
+  results — silently for a vector-less db, with a stderr note when vectors
+  exist but the embedder is down (`tests/test_vectors.py`).
 
 ## Coverage gaps (not tested)
 
@@ -154,10 +171,13 @@ docs/STARTUP_GUIDE.md).
   live `OllamaExtractor` → `ChatOllama` path (`src/gloss/extract.py:64-65`) and
   real structured-output behavior are never exercised — A/B model quality is
   evaluated operationally via `gloss eval`, not in pytest (see docs/BUILDS.md).
-- **`cli.py` is barely covered.** Only `gloss retrieve` is run end-to-end
-  (`tests/test_cli.py`); `gloss build` and `gloss eval` argument parsing,
-  `--workers`/`--resume`/`--build-dir` flag wiring, and error/exit paths are not
-  invoked through the CLI.
+- **`cli.py` is barely covered.** Only `gloss retrieve` (default mode) is run
+  end-to-end (`tests/test_cli.py`); `gloss embed`, `retrieve --mode`, `gloss
+  build` and `gloss eval` argument parsing, `--workers`/`--resume`/`--build-dir`
+  flag wiring, and error/exit paths are not invoked through the CLI. (The logic
+  behind the modes is covered at the `vectors.py` level.)
+- **The real Ollama `/api/embed` path** (`ollama_embed`) is never exercised in
+  pytest — verified operationally via `gloss embed` + `gloss eval --mode hybrid`.
 - **`estimate_num_ctx` warning branch** prints but is not asserted; the
   cap-exceeded WARNING string is not checked.
 - **`--workers` concurrency** is tested at the `enrich_units` level

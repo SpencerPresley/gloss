@@ -14,7 +14,7 @@ an Ollama model are required, so always run it under the `build` extra:
 
 ```bash
 uv run --extra build gloss build --model minimax-m3:cloud --workers 8 \
-  --db build/minimax.db --build-dir build/minimax
+  --db build/minimax-v2.db --build-dir build/minimax-v2
 ```
 
 `run_build` (`src/gloss/build.py:47`) does it all: resolve per-chapter element spans
@@ -23,8 +23,12 @@ build prompts, size `num_ctx` once over the whole build, enrich each chapter wit
 taxonomy principle card, accumulate every row, and call `build_db`. Expected tail:
 
 ```
-built 257 units (0 enrichment failures) -> build/minimax.db
+built 197 units (0 enrichment failures) -> build/minimax-v2.db
 ```
+
+**A build overwrites the db file, so vectors do not survive it** — if the corpus is
+embedded for hybrid retrieval, re-run `gloss embed --db <db>` after every build
+(~16s; see [CLI.md](CLI.md#embed)).
 
 ## Pipeline, end to end
 
@@ -38,8 +42,10 @@ built 257 units (0 enrichment failures) -> build/minimax.db
 Chapters are detected via `profile.chapter_re`, or taken verbatim from
 `profile.chapter_pages` when that override is set (`build.py:74`). With `--chapter` set,
 only that one chapter is built; with no `--chapter`, the whole book plus appendices is
-built (`build.py:80`). A whole-book build of APOSD is **257 units across 23 chapters**
-(21 chapters + 2 summary appendices).
+built (`build.py:80`). A whole-book build of APOSD is **197 units across 23 chapters**
+(21 chapters + 2 summary appendices). It was 257 before code-attach segmentation
+(2026-07-10): code blocks now merge into the prose unit that introduces them, and
+inline code spans the parser misread as blocks fold back into their sentence.
 
 ## Per-chapter JSONL checkpoint
 
@@ -70,11 +76,14 @@ One line per enriched unit, a flat JSON object (`enrich.py:89`). Real row from
 
 The write path appends each row as it completes and `flush()`es it (`enrich.py:118-119`),
 so an interrupted run leaves a valid partial file. On read-back, `enrich_units` parses
-every line into `rows_by_key` keyed by `key`, **last-wins** (`enrich.py:134`) — a later
-successful row supersedes an earlier failed one for the same unit. (Note: a unit
-re-enriched on a later `--resume` appends a *new* line and dedup-by-key keeps the last, so
-`wc -l` can exceed the unit count. The current minimax checkpoints have no re-attempts —
-257 lines, 257 distinct keys, matching the 257 db units.)
+every line into `rows_by_key` keyed by `key`, **last-wins** (`enrich.py`) — a later
+successful row supersedes an earlier failed one for the same unit — and **filtered to
+the current unit set**: rows whose key matches no current unit (e.g. written under
+older segmentation rules) stay on disk but are never shipped into the db. (Note: a unit
+re-enriched on a later `--resume` appends a *new* line, and a segmentation change
+leaves stale-key lines behind, so `wc -l` can exceed the unit count — e.g. the
+`build/minimax-v2` checkpoints carry the old fragment rows plus the 59 re-enriched
+merged units.)
 
 ## `--resume` semantics
 
@@ -107,8 +116,14 @@ if not row.get("needs_enrich"):
 
 ```bash
 uv run --extra build gloss build --resume \
-  --db build/minimax.db --build-dir build/minimax
+  --db build/minimax-v2.db --build-dir build/minimax-v2
 ```
+
+- Because keys hash `section | is_code | text`, a **segmentation-rule change re-enriches
+  only the units whose boundaries actually moved**. The 2026-07-10 code-attach change
+  re-enriched 59 of 197 units; the other 138 resumed from the copied v1 checkpoints
+  (`cp -r build/minimax build/minimax-v2`, then `--resume`), and the old fragments'
+  rows were filtered out at read-back rather than shipped.
 
 ## `--workers` concurrency model
 
@@ -218,24 +233,33 @@ The CLI default is `--model minimax-m3:cloud` (`cli.py:58`). Both produced 257 u
 failures on the full book.
 
 **A/B two models** by building a db with each (own `--db` + `--build-dir`) and scoring
-top-k hit-rate over `corpora/aposd/cases.yaml`:
+`corpora/aposd/cases.yaml` (31 cases as of 2026-07-10):
 
 ```bash
-uv run --extra build gloss eval --db build/minimax.db   # => hit_rate=0.75 over n=16
-uv run --extra build gloss eval --db build/glm52.db     # build both, compare, keep the winner
+uv run --extra build gloss eval --db build/minimax-v2.db                # lexical
+uv run --extra build gloss eval --db build/minimax-v2.db --mode hybrid  # needs gloss embed first
 ```
 
-(Only `build/minimax.db` exists today, and it evals to **0.75 (12/16)** — `build/glm52.db`
-above is illustrative; GLM 5.2 has no eval number on record yet.)
+`eval` (`evalrun.py`) reports `hit@k`, `hit@1`, and `MRR` — a case hits if its top-k
+contains a result matching `expect_section` / `expect_chapter` / `expect_principle` —
+and `--vs <mode>` adds a paired sign-flip significance test between two modes
+(`Δmrr` + p-value), the guard against tuning knobs into small-n noise. Numbers on
+record for the current tree (k=5, n=31; embedded = with mean-centered vectors, see
+DESIGN.md's experiment log):
 
-`eval` (`evalrun.py:26`) reports `hit_rate` over the 16 cases — a case hits if its top-k
-contains a result matching `expect_section` or `expect_principle`. The **current**
-in-repo `build/minimax.db` scores **0.75 (12/16)**. The handoff notes record an A/B of
-devstral 0.75 (12/16) vs minimax **0.81 (13/16)**, but that 0.81 was scored against a
-since-superseded/renamed db and isn't reproducible from what's checked in (devstral's db,
-`build/aposd.db`, is now a 0-byte stub) — so treat the +1/16 lead as historical, not live.
-The eval set wants strengthening before locking a model. See [DESIGN.md](DESIGN.md) for the
-decision rationale.
+| corpus | mode | hit@5 | hit@1 | MRR |
+|---|---|---|---|---|
+| `build/minimax.db` (257 units, pre-seg-fix) | lexical | 0.77 | 0.52 | 0.60 |
+| `build/minimax-v2.db` (197 units) | lexical | 0.84 | 0.55 | 0.66 |
+| `build/minimax-v2.db` embedded | semantic | 0.94 | 0.65 | 0.75 |
+| `build/minimax-v2.db` embedded | **hybrid** | **0.94** | **0.71** | **0.80** |
+
+Hybrid-vs-lexical: Δmrr=+0.136, p=0.037 (`gloss eval --db build/minimax-v2.db
+--mode hybrid --vs lexical`).
+
+(Historical: the old 16-case set scored minimax at 0.75; a devstral-vs-minimax A/B from
+the handoff notes isn't reproducible from what's checked in. GLM 5.2 has no eval number
+on record.) See [DESIGN.md](DESIGN.md) for the decision rationale.
 
 ## Troubleshooting
 
@@ -260,8 +284,14 @@ for db in build/*.db; do
 done
 ```
 
-A full-book build is **257 units**. Point `--db` at a db that reports 257 (e.g.
-`build/minimax.db`), not at the 0-byte stub.
+A full-book build is **197 units** under current segmentation (a 257-unit db is a
+pre-code-attach build — still queryable, but stale). Point `--db` at a real db (e.g.
+`build/minimax-v2.db`), not at a 0-byte stub.
+
+**Hybrid mode silently gone / `via` tags missing** — the db has no vectors (a rebuild
+wiped them) or Ollama isn't running. `auto` mode degrades to lexical by design; run
+`gloss embed --db <db>` and/or start Ollama. Check with
+`sqlite3 <db> "SELECT COUNT(*) FROM vectors;"`.
 
 **Nonzero enrichment failures** — see [Enrichment failure handling](#enrichment-failure-handling).
 `--resume` retries only the failed units; if every unit fails, the model likely doesn't

@@ -1,16 +1,19 @@
 # CLAUDE.md
 
 Thin index for working in this repo. It carries only the project identity, a map to the
-detailed docs, and the two facts that bite most often. Open the topic doc for anything
+detailed docs, and the three facts that bite most often. Open the topic doc for anything
 deeper — don't infer from this page.
 
 ## What it is
 
 `gloss` turns a source text into a portable, **cited** SQLite/FTS5 corpus you search by
-lexical query + metadata, getting back the source's *actual passages* (not a paraphrase).
+free-text query + metadata, getting back the source's *actual passages* (not a paraphrase).
+Retrieval is hybrid — BM25 + an optional vector channel (RRF-fused, per-channel rank tags
+on every hit) — falling back to pure lexical when the db has no vectors or Ollama is down.
 A corpus-agnostic **engine** (`src/gloss/`) + per-book **instances** (`corpora/<name>/`).
 Only instance so far: `aposd` (Ousterhout's *A Philosophy of Software Design*). Query-time
-is stdlib-only; build-time needs the `build` extra + an Ollama model.
+is stdlib-packages-only (hybrid additionally wants a local Ollama *service*); build-time
+needs the `build` extra + an Ollama model.
 
 ## Where to look
 
@@ -28,25 +31,34 @@ is stdlib-only; build-time needs the `build` extra + an Ollama model.
 ## Day-to-day
 
 ```bash
-# query (stdlib-only) — full flags in docs/CLI.md
-uv run gloss retrieve "<query>" --db build/minimax.db -k 3
+# query (stdlib-only; hybrid when the db is embedded, lexical otherwise) — flags in docs/CLI.md
+uv run gloss retrieve "<query>" --db build/minimax-v2.db -k 3
+
+# embed the semantic channel into the db (stdlib-only; needs local Ollama + embeddinggemma)
+uv run gloss embed --db build/minimax-v2.db
 
 # build (needs `build` extra + Ollama model + source PDF) — internals in docs/BUILDS.md
 uv run --extra build gloss build --model minimax-m3:cloud --workers 8 \
-    --db build/minimax.db --build-dir build/minimax
+    --db build/minimax-v2.db --build-dir build/minimax-v2
 
 # tests (no model, no corpus needed)
 uv run --extra build pytest -q
 ```
 
-## Two facts that bite
+## Three facts that bite
 
 1. **`--db` is required (no default), and the live db is model-named.** Builds go to
-   `build/<model>.db` (the real corpus today is **`build/minimax.db`**, 257 units) — pass
-   `--db` explicitly on every command. A stale 0-byte `build/aposd.db` left by an old build
-   will open but error → `OperationalError: no such table: units_fts`; verify with
+   `build/<model>.db` (the real corpus today is **`build/minimax-v2.db`**, 197 units;
+   `build/minimax.db` is the stale pre-seg-fix 257-unit build) — pass `--db` explicitly
+   on every command. A stale 0-byte `build/aposd.db` left by an old build will open but
+   error → `OperationalError: no such table: units_fts`; verify with
    `sqlite3 <db> "SELECT COUNT(*) FROM units;"`.
 2. **Verbatim text and the coarse `principle` are not the LLM's.** Unit boundaries + text
-   are fixed deterministically at segmentation; `principle` is set from the taxonomy. The
-   LLM only writes *retrieval metadata* (context line, symptom questions, key terms). So
-   retrieval always returns the source's own words. (Details in `docs/ARCHITECTURE.md`.)
+   are fixed deterministically at segmentation (code blocks travel with their lead-in
+   prose); `principle` is set from the taxonomy. The LLM only writes *retrieval metadata*
+   (context line, symptom questions, key terms). So retrieval always returns the source's
+   own words. (Details in `docs/ARCHITECTURE.md`.)
+3. **Vectors don't survive a rebuild.** `gloss build` overwrites the db file, wiping the
+   `vectors` table — re-run `gloss embed --db <db>` (~16s) after every build, or hybrid
+   silently degrades to lexical (no `via` tags on hits). Check with
+   `sqlite3 <db> "SELECT COUNT(*) FROM vectors;"`.

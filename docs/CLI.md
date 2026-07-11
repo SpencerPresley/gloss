@@ -1,21 +1,24 @@
 # CLI Reference
 
-The `gloss` console script ([`src/gloss/cli.py`](../src/gloss/cli.py)) has three subcommands: `retrieve` (query-time), `build`, and `eval`. A subcommand is **required** — running `gloss` with no args exits non-zero.
+The `gloss` console script ([`src/gloss/cli.py`](../src/gloss/cli.py)) has four subcommands: `retrieve` and `embed` (query-side, stdlib packages only), `build`, and `eval`. A subcommand is **required** — running `gloss` with no args exits non-zero.
 
 ```
-gloss [-h] {retrieve,build,eval} ...
+gloss [-h] {retrieve,embed,build,eval} ...
 ```
 
-`retrieve` imports only the stdlib store. `build` and `eval` lazily import their build-only deps inside the command function ([cli.py:31](../src/gloss/cli.py#L31), [cli.py:38](../src/gloss/cli.py#L38)), so `retrieve` never pulls them in. Run query-time commands with plain `uv run gloss ...`; run `build`/`eval` with `uv run --extra build gloss ...` (eval needs `pyyaml`; see [Errors](#error--exit-behavior)).
+`retrieve` and `embed` import only stdlib modules (`store` / `vectors`) — though `embed` and the hybrid retrieve modes additionally need a **running local Ollama** (a service, not a package). `build` and `eval` lazily import their build-only deps inside the command function, so `retrieve` never pulls them in. Run query-side commands with plain `uv run gloss ...`; run `build`/`eval` with `uv run --extra build gloss ...` (eval needs `pyyaml`; see [Errors](#error--exit-behavior)).
 
 ---
 
 ## `retrieve`
 
-Print source passages matching a design situation, ranked by BM25 over the FTS5 index.
+Print source passages matching a design situation. Default mode is `auto`: BM25 and
+the vector channel fused with reciprocal rank fusion when the db has vectors and the
+embedder is reachable, plain BM25 otherwise.
 
 ```
-gloss retrieve [-h] --db DB [-k K] [--principle PRINCIPLE] [--type TYPE] [--json] query
+gloss retrieve [-h] --db DB [-k K] [--principle PRINCIPLE] [--type TYPE] [--json]
+               [--mode {auto,lexical,hybrid,semantic}] [--ollama-url URL] query
 ```
 
 | Arg | Type | Default | Meaning |
@@ -26,23 +29,28 @@ gloss retrieve [-h] --db DB [-k K] [--principle PRINCIPLE] [--type TYPE] [--json
 | `--principle` | str, repeatable | `None` | Filter to one or more coarse principle slugs. `action="append"` — pass the flag once per value ([cli.py:51](../src/gloss/cli.py#L51)). |
 | `--type` | str, repeatable | `None` | Filter to one or more unit types. `action="append"` ([cli.py:52](../src/gloss/cli.py#L52)). |
 | `--json` | flag | off | Emit the raw list of row dicts as indented JSON instead of formatted text. |
+| `--mode` | choice | `auto` | `auto` = hybrid when the db has vectors and Ollama answers, else lexical (silently for a vector-less db, with a stderr note when vectors exist but the embedder is down). `lexical` = BM25 only, never touches vectors. `hybrid` = BM25 + vectors via RRF, **fails loudly** (`SystemExit`) if the channel can't run. `semantic` = vectors only (ablation/debugging). |
+| `--ollama-url` | str | `http://localhost:11434` | Ollama base URL for query embedding (all modes except `lexical`). |
 
-Filters are AND-combined across facets, OR-combined within a facet (`u.principle IN (...) AND u.type IN (...)`, [store.py:79-89](../src/gloss/store.py#L79)).
+Filters are AND-combined across facets, OR-combined within a facet (`u.principle IN (...) AND u.type IN (...)`, [store.py:79-89](../src/gloss/store.py#L79)). Filters apply to both channels.
 
 ### Output: default (text)
 
-Each hit renders as a one-line citation header followed by the verbatim passage and a trailing blank line ([`_format_hit`, cli.py:14-17](../src/gloss/cli.py#L14)):
+Each hit renders as a one-line citation header followed by the verbatim passage and a trailing blank line ([`_format_hit`, cli.py](../src/gloss/cli.py)):
 
 ```
-[<principle> §<section> p.<page>] (<type>)
+[<principle> §<section> p.<page>] (<type> via <channels>)
 <verbatim text>
 ```
 
-If there are no hits, prints `(no matches)`.
+The `via` tag appears on hybrid/semantic hits and shows each channel's rank — it makes
+reliability visible at a glance: `via lex#1+sem#2` means two independent signals agree
+on this passage; `via sem#4` means only one channel surfaced it, so read it with more
+care. Lexical-mode hits have no tag. If there are no hits, prints `(no matches)`.
 
 ```console
-$ uv run gloss retrieve "deep module hides complexity" --db build/minimax.db -k 1
-[information-hiding §5.10 p.48] (definition)
+$ uv run gloss retrieve "deep module hides complexity" --db build/minimax-v2.db -k 1
+[information-hiding §5.10 p.48] (definition via lex#1+sem#2)
 Information hiding and deep modules are closely related. If a module hides a lot
 of information, that tends to increase the amount of functionality provided by the
 module ...
@@ -54,7 +62,10 @@ Prints `json.dumps(hits, indent=2)` ([cli.py:24](../src/gloss/cli.py#L24)) — a
 
 | Key | Type | Notes |
 |-----|------|-------|
-| `score` | float | BM25 score; **more negative = more relevant**, results ordered ascending ([store.py:73-74](../src/gloss/store.py#L73)). |
+| `score` | float\|null | BM25 score; **more negative = more relevant**. In lexical mode results are ordered by it ascending. In hybrid mode it's informational only (order comes from `rrf`) and is `null` for a hit the lexical channel didn't rank. |
+| `channels` | object | Hybrid/semantic modes only: per-channel 1-based rank, e.g. `{"lexical": 2, "semantic": 1}`. A missing key means that channel didn't rank the unit in its candidate pool. |
+| `rrf` | float | Hybrid mode only: the fused reciprocal-rank score results are ordered by (higher = better). |
+| `sem_score` | float | Semantic mode only: max cosine similarity over the unit's vectors. |
 | `id` | int | `units.id` primary key. |
 | `principle` | str\|null | Coarse facet slug (or empty/null for gap chapters). |
 | `chapter` | str | Chapter id. |
@@ -65,12 +76,12 @@ Prints `json.dumps(hits, indent=2)` ([cli.py:24](../src/gloss/cli.py#L24)) — a
 | `context_line` | str | LLM-generated one-line situating gloss. |
 | `applies_when` | str | LLM-generated applicability note. |
 | `key_terms` | str | Space-joined terms. |
-| `questions` | str | Space-joined questions the passage answers. |
+| `questions` | str | **Newline**-joined questions the passage answers (one per line, so per-question boundaries survive for the vector channel). |
 | `enrich_model` | str | Model that enriched the unit, e.g. `minimax-m3:cloud`. |
 | `needs_enrich` | int | `0` = enriched, `1` = enrichment failed/pending. |
 
 ```console
-$ uv run gloss retrieve "deep module hides complexity" --db build/minimax.db -k 1 --json
+$ uv run gloss retrieve "deep module hides complexity" --db build/minimax-v2.db -k 1 --json
 [
   {
     "score": -8.607073516282574,
@@ -97,20 +108,61 @@ $ uv run gloss retrieve "deep module hides complexity" --db build/minimax.db -k 
 
 ```console
 # top 5 (k defaults to 5)
-uv run gloss retrieve "my class just forwards calls and adds nothing" --db build/minimax.db
+uv run gloss retrieve "my class just forwards calls and adds nothing" --db build/minimax-v2.db
 
 # filter to one principle, more results
 uv run gloss retrieve "callers must call setup in the right order" \
-  --db build/minimax.db --principle information-hiding -k 10
+  --db build/minimax-v2.db --principle information-hiding -k 10
 
 # repeat a flag for OR within a facet
-uv run gloss retrieve "shallow class" --db build/minimax.db \
+uv run gloss retrieve "shallow class" --db build/minimax-v2.db \
   --type red_flag --type rationale
 
 # combine facets (AND across, OR within)
-uv run gloss retrieve "shallow helper manager" --db build/minimax.db \
+uv run gloss retrieve "shallow helper manager" --db build/minimax-v2.db \
   --principle deep-modules --type red_flag
+
+# force a mode
+uv run gloss retrieve "boolean flag for one caller" --db build/minimax-v2.db --mode hybrid
+uv run gloss retrieve "boolean flag for one caller" --db build/minimax-v2.db --mode lexical
 ```
+
+---
+
+## `embed`
+
+Precompute the semantic channel: one pass over an already-built db, embedding every
+unit into a `vectors` table inside the **same** `.db` file ([`vectors.py:embed_corpus`](../src/gloss/vectors.py)).
+Stdlib packages only, but needs a running local Ollama serving the embedding model
+(`ollama pull embeddinggemma`).
+
+```
+gloss embed [-h] --db DB [--model MODEL] [--ollama-url URL] [--batch BATCH]
+```
+
+| Arg | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `--db` | str | **required** | Corpus db to embed. Vectors are written into this file; prior vectors are replaced. |
+| `--model` | str | `embeddinggemma:latest` | Ollama embedding model. Recorded in `vectors_meta` and reused automatically at query time. |
+| `--ollama-url` | str | `http://localhost:11434` | Ollama base URL. |
+| `--batch` | int | `32` | Texts per `/api/embed` request. |
+
+Each unit gets several vectors: one *gist* (context_line + applies_when + key_terms),
+one **per generated question** (dense doc2query), and one per verbatim-text chunk
+(units over ~6000 chars are split at line boundaries to fit embeddinggemma's 2048-token
+context). Vectors are stored **mean-centered + renormalized** (the corpus common
+direction is removed and the mean recorded in `vectors_meta`, so queries get the
+identical correction — see DESIGN.md's experiment log for why and the measured gain). Errors propagate loudly — an embed command must not silently degrade the way
+queries do.
+
+```console
+$ uv run gloss embed --db build/minimax-v2.db
+embedded 197 units -> 1493 vectors (dim=768, model=embeddinggemma:latest) in build/minimax-v2.db
+```
+
+Takes ~16s for the full APOSD corpus on a local `embeddinggemma` (307M). The db stays a
+single portable file (~7 MB with vectors). **Re-run after every `gloss build`** — a
+build overwrites the db file, so vectors don't survive it.
 
 ---
 
@@ -147,29 +199,40 @@ The startup line `chapters=N units=M num_ctx=C model=...` is printed before enri
 
 ## `eval`
 
-Score retrieval against eval cases (top-k hit-rate). Lazily imports `evalrun`, which imports `pyyaml` ([evalrun.py:28](../src/gloss/evalrun.py#L28)) — run with the `build` extra.
+Score retrieval against eval cases: hit@k, hit@1, and MRR — the last two are
+rank-sensitive, so the eval can tell "right passage at #1" from "right passage at #5".
+Lazily imports `evalrun`, which imports `pyyaml` — run with the `build` extra.
 
 ```
-gloss eval [-h] --db DB [--cases CASES]
+gloss eval [-h] --db DB [--cases CASES] [-k K] [-v]
+           [--mode {lexical,hybrid,semantic}] [--ollama-url URL]
 ```
 
 | Arg | Type | Default | Meaning |
 |-----|------|---------|---------|
 | `--db` | str | **required** | Corpus db to evaluate against. No default. |
-| `--cases` | str | `corpora/aposd/cases.yaml` | YAML file with a `cases:` list. Each case has `query` plus `expect_principle` and/or `expect_section`; a case is a hit if any top-5 result matches either expectation ([evalrun.py:8-23](../src/gloss/evalrun.py#L8)). |
-
-`k` is fixed at 5 (not a flag; [evalrun.py:20](../src/gloss/evalrun.py#L20)).
+| `--cases` | str | `corpora/aposd/cases.yaml` | YAML file with a `cases:` list. Each case has `query` plus any of `expect_principle` / `expect_section` / `expect_chapter`; a result matching **any** pinned field counts ([evalrun.py:8-23](../src/gloss/evalrun.py#L8)). Chapter/section pins exist because the null-principle chapters (10, 11, 14, 17-21) are unreachable through the principle facet. |
+| `-k` | int | `5` | Top-k window for `hit@k`. |
+| `-v` / `--verbose` | flag | off | Also print every case whose expected unit is **not** ranked #1 (its rank or `miss`). |
+| `--mode` | choice | `lexical` | Retrieval mode to score. Deliberately no `auto`: an eval must not silently degrade. `hybrid`/`semantic` need an embedded db + running Ollama. |
+| `--vs` | choice | — | Second mode to compare against: prints both score lines plus `Δmrr` and a p-value from a paired sign-flip randomization test on per-case reciprocal rank ([evalrun.py:paired_sign_flip](../src/gloss/evalrun.py)) — use it before adopting any knob change. |
+| `--ollama-url` | str | `http://localhost:11434` | Ollama base URL for the non-lexical modes. |
 
 ### Output
 
-A single line ([evalrun.py:31](../src/gloss/evalrun.py#L31)):
-
 ```console
-$ uv run --extra build gloss eval --db build/minimax.db
-hit_rate=0.75 over n=16
+$ uv run --extra build gloss eval --db build/minimax-v2.db --mode hybrid
+hit@5=0.94 hit@1=0.71 mrr=0.80 n=31
+
+$ uv run --extra build gloss eval --db build/minimax-v2.db --mode hybrid --vs lexical
+hybrid  : hit@5=0.94 hit@1=0.71 mrr=0.80 n=31
+lexical : hit@5=0.84 hit@1=0.55 mrr=0.66 n=31
+Δmrr=+0.136 p=0.0365 (paired sign-flip on per-case reciprocal rank, 10000 resamples)
 ```
 
-`hit_rate` is the fraction of cases whose top-5 contains the expected unit; `n` is the case count.
+`hit@k` = fraction of cases whose top-k contains the expected unit (the historical
+`hit_rate`); `hit@1` = fraction where it is ranked first; `mrr` = mean reciprocal rank
+of the first matching result.
 
 ---
 
@@ -195,13 +258,18 @@ Gap chapters map to `principle: null` ([taxonomy.yaml:216-227](../corpora/aposd/
 A `CHECK` constraint pins the set at the schema level ([store.py:16](../src/gloss/store.py#L16)). Confirmed against the built corpus:
 
 ```console
-$ sqlite3 build/minimax.db "SELECT DISTINCT type FROM units;"
-rationale
-definition
-code
-example
-red_flag
+$ sqlite3 build/minimax-v2.db "SELECT type, COUNT(*) FROM units GROUP BY type;"
+code|4
+definition|58
+example|50
+rationale|63
+red_flag|22
 ```
+
+`code` is rare under the current segmentation: code blocks travel inside the prose unit
+that introduces them, so `type='code'` appears only where the LLM classifies a merged
+unit as code (a *standalone* block with no lead-in would be forced to `code`, but APOSD
+has none).
 
 | Value | Meaning |
 |-------|---------|
@@ -219,7 +287,10 @@ red_flag
 |-----------|--------|
 | Query with no >2-char tokens | `search` returns `[]`; text mode prints `(no matches)`, `--json` prints `[]` ([store.py:77-78](../src/gloss/store.py#L77)). |
 | `retrieve` / `eval` against a db with no `units_fts` table (e.g. a fresh 0-byte `build/aposd.db`) | `sqlite3.OperationalError: no such table: units_fts` — uncaught traceback ([store.py:93](../src/gloss/store.py#L93)). See [BUILDS.md](BUILDS.md) for the 0-byte-db gotcha. |
-| `eval` (or any build-extra command) run without the `build` extra | `ModuleNotFoundError: No module named 'yaml'` ([evalrun.py:28](../src/gloss/evalrun.py#L28)). Use `uv run --extra build`. |
+| `eval` (or any build-extra command) run without the `build` extra | `ModuleNotFoundError: No module named 'yaml'`. Use `uv run --extra build`. |
+| `retrieve --mode hybrid`/`semantic` against a db with no vectors, or with Ollama down | `SystemExit: gloss retrieve --mode …: db has no vectors — run: gloss embed …` (or `embedder unreachable at <url>`). Explicit modes fail loudly. |
+| `retrieve` (auto mode) when vectors exist but the embedder is down | Falls back to lexical and prints `gloss: semantic channel off (…); lexical only` to **stderr**; results still returned. |
+| `embed` with Ollama down / model not pulled | Uncaught `urllib.error.URLError`/`HTTPError` traceback — loud by design. Start Ollama / `ollama pull embeddinggemma`. |
 | `build --chapter X` where `X` isn't detected | `raise SystemExit("chapter 'X' not found by detection/override")` ([build.py:86](../src/gloss/build.py#L86)). |
 | `--db` omitted on any subcommand | argparse error, non-zero exit: `the following arguments are required: --db`. There is no default db ([cli.py:49](../src/gloss/cli.py#L49),`:59`,`:68`). |
 | No subcommand given | argparse error, non-zero exit (`required=True`, [cli.py:45](../src/gloss/cli.py#L45)). |

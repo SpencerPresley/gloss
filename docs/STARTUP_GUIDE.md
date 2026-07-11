@@ -53,8 +53,11 @@ for db in build/*.db; do
     && echo "$db -> ${n:-0} units" || echo "$db -> EMPTY/invalid"
 done
 ```
-A full-book build is **257 units**. If you see that, you're done — skip to Step 4 and
-point `--db` at that file.
+A full-book build is **197 units** under current segmentation (a 257-unit db is from
+the pre-code-attach rules — usable but stale; rebuild to pick up merged code units).
+If you see 197, skip to Step 4 and point `--db` at that file. To check whether it's
+also embedded for hybrid retrieval: `sqlite3 <db> "SELECT COUNT(*) FROM vectors;"`
+(~1,500 = embedded; an error = lexical-only, see Step 4).
 
 ---
 
@@ -67,7 +70,7 @@ There is **no separate "analyze" step** — `gloss build` does it all and writes
 
 | Model           | `--model` tag      | suggested `--db` / `--build-dir`        |
 |-----------------|--------------------|-----------------------------------------|
-| MiniMax M3      | `minimax-m3:cloud` | `--db build/minimax.db --build-dir build/minimax` |
+| MiniMax M3      | `minimax-m3:cloud` | `--db build/minimax-v2.db --build-dir build/minimax-v2` |
 | GLM 5.2         | `glm-5.2:cloud`    | `--db build/glm52.db   --build-dir build/glm52`   |
 
 Always give each model its **own `--build-dir`** so their per-chapter JSONL checkpoints
@@ -78,7 +81,7 @@ don't overwrite each other.
 # MiniMax M3
 uv run --extra build gloss build \
   --model minimax-m3:cloud --workers 8 \
-  --db build/minimax.db --build-dir build/minimax
+  --db build/minimax-v2.db --build-dir build/minimax-v2
 
 # …or GLM 5.2
 uv run --extra build gloss build \
@@ -86,7 +89,7 @@ uv run --extra build gloss build \
   --db build/glm52.db --build-dir build/glm52
 ```
 
-Expected tail: `built 257 units (0 enrichment failures) -> build/<name>.db`.
+Expected tail: `built 197 units (0 enrichment failures) -> build/<name>.db`.
 A nonzero failure count usually means the model ignored structured output — the build
 warns and you can `--resume` to retry only the failed units.
 
@@ -100,31 +103,55 @@ uv run --extra build gloss build --chapter 6 \
 failed units):
 ```bash
 uv run --extra build gloss build --model minimax-m3:cloud --workers 8 \
-  --db build/minimax.db --build-dir build/minimax --resume
+  --db build/minimax-v2.db --build-dir build/minimax-v2 --resume
 ```
 
 ---
 
-## Step 4 — Verify retrieval works
+## Step 4 — (Recommended) Embed for hybrid retrieval
+
+One pass writes per-unit vectors into the same `.db`, enabling the hybrid
+(BM25 + vector, RRF-fused) mode that `retrieve` uses by default when available.
+Needs the embedding model pulled once (`ollama pull embeddinggemma`):
+
+```bash
+uv run gloss embed --db build/minimax-v2.db
+# embedded 197 units -> 1493 vectors (dim=768, model=embeddinggemma:latest) ...
+```
+
+~16 seconds. **Re-run this after every `gloss build`** — a build overwrites the db
+file, so vectors don't survive it. Skipping this step is fine: retrieval works
+lexical-only, with nothing running.
+
+---
+
+## Step 5 — Verify retrieval works
 
 ```bash
 uv run gloss retrieve "should I make this API general purpose" \
-  --db build/minimax.db -k 3
+  --db build/minimax-v2.db -k 3
 ```
-You should get cited passages (`[principle §section p.N] (type)` + verbatim text), not
-`(no matches)` and not a traceback. Add `--json` for structured output, and filter with
-`--principle <slug>` / `--type <t>` (valid values in `CLAUDE.md`).
+You should get cited passages (`[principle §section p.N] (type via lex#1+sem#2)` +
+verbatim text), not `(no matches)` and not a traceback. The `via` tag shows each
+retrieval channel's rank (both = two independent signals agree) and only appears when
+the db is embedded and Ollama is up — without them retrieval silently runs lexical-only
+and the tag is absent. Add `--json` for structured output, filter with
+`--principle <slug>` / `--type <t>`, and force a mode with
+`--mode lexical|hybrid|semantic` (valid values in `CLAUDE.md`).
 
 ---
 
-## Step 5 — (Optional) Score / compare models
+## Step 6 — (Optional) Score / compare models
 
-Eval is the only way to answer "is this model's corpus actually good" — top-k hit-rate
-over `corpora/aposd/cases.yaml` (16 cases):
+Eval is the only way to answer "is this model's corpus actually good" — hit@k / hit@1 /
+MRR over `corpora/aposd/cases.yaml` (31 cases):
 ```bash
-uv run --extra build gloss eval --db build/minimax.db
-uv run --extra build gloss eval --db build/glm52.db    # build both, compare, keep the winner
+uv run --extra build gloss eval --db build/minimax-v2.db                # lexical
+uv run --extra build gloss eval --db build/minimax-v2.db --mode hybrid  # needs Step 4
 ```
+Current numbers (k=5): lexical `hit@5=0.84 hit@1=0.55 mrr=0.66`, hybrid
+`hit@5=0.94 hit@1=0.71 mrr=0.80`. Add `--vs lexical` to a hybrid eval to get a
+paired significance test between the modes.
 
 ---
 
@@ -133,8 +160,10 @@ uv run --extra build gloss eval --db build/glm52.db    # build both, compare, ke
 ```
 PDF at resources/…compress.pdf?  ── no ──► Step 1 (curl)
             │ yes
-build/<model>.db with 257 units? ── no ──► Step 3 (build, minimax-m3 or glm-5.2)
+build/<model>.db with 197 units? ── no ──► Step 3 (build, minimax-m3 or glm-5.2)
+            │ yes
+db has vectors (COUNT(*) FROM vectors)? ── no ──► Step 4 (gloss embed, ~16s)
             │ yes
             ▼
-   retrieve --db build/<model>.db   (Step 4)
+   retrieve --db build/<model>.db   (Step 5)
 ```

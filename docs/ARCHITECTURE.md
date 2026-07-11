@@ -26,15 +26,24 @@ adding a book means adding a `corpora/<name>/` directory, not touching `src/glos
 
 ## Two phases and the dependency boundary
 
-gloss runs in two phases with very different dependency footprints:
+gloss runs in two phases (plus one optional post-pass) with very different
+dependency footprints:
 
 1. **Build (offline, once per book/model)** — parse the PDF, segment into units,
    LLM-enrich each unit, write a SQLite/FTS5 db. Needs the `build` extra
    (pymupdf, langchain, langchain-ollama, pydantic, pyyaml) plus a running Ollama
    model.
-2. **Query (online, repeated)** — open the db and run lexical search. **Stdlib
-   only.** The db is portable; it runs anywhere Python runs with nothing
-   installed.
+2. **Embed (offline, optional, once per built db)** — `gloss embed` reads the
+   finished db's units and writes per-unit vectors into a `vectors` table in the
+   **same** file (`src/gloss/vectors.py`). Stdlib packages only, but needs a
+   running local Ollama serving an embedding model (`embeddinggemma`). Must be
+   re-run after any rebuild — `build_db` overwrites the file.
+3. **Query (online, repeated)** — open the db and search. **Stdlib packages
+   only.** Lexical mode needs literally nothing installed or running; hybrid
+   mode (BM25 + vectors, the default when vectors exist) additionally needs the
+   local Ollama *service* for one query-embedding call, and degrades back to
+   lexical with a stderr note when it's unreachable. The db is portable; vectors
+   travel inside it.
 
 The boundary is enforced in code, not just convention:
 
@@ -42,6 +51,9 @@ The boundary is enforced in code, not just convention:
   `build` optional-extra (`pyproject.toml:8`).
 - `src/gloss/store.py` (the query hot path) imports only `re` and `sqlite3`
   (`src/gloss/store.py:6`).
+- `src/gloss/vectors.py` (the semantic channel) imports only stdlib (`urllib`,
+  `array`, `math`, `sqlite3`, …) — its Ollama dependency is an HTTP service, not
+  a package, and only the non-lexical modes touch it.
 - `src/gloss/cli.py` imports `store.search` at module top, but **lazily** imports
   `build.run_build` and `evalrun.run_eval` inside the command handlers
   (`src/gloss/cli.py:31`, `src/gloss/cli.py:38`). So `gloss retrieve` never pulls
@@ -73,9 +85,14 @@ The boundary is enforced in code, not just convention:
                                           build_db (store.py)
                                           units table + units_fts mirror + trigger
                                                    │
+                              gloss embed (vectors.py, optional post-pass)
+                              per-unit gist/question/text vectors -> vectors table
+                              in the SAME .db, via local Ollama /api/embed
+                                                   │
                                                    ▼
-                                          search (store.py)  ◄── gloss retrieve (cli.py)
-                                          BM25 over FTS5, returns verbatim passages
+                       search (store.py, BM25)  ─┬─►  gloss retrieve (cli.py)
+                       search_hybrid (vectors.py)┘    lexical | hybrid (RRF fusion,
+                                                      per-channel rank tags) | semantic
 ```
 
 `build.py:run_build` wires the stages for one chapter (or the whole book)
@@ -98,7 +115,14 @@ Contiguous code-font lines accumulate into one `code` Element; figures below
 `(units, section_texts)` tuple:
 - `RawUnit` = `(text, chapter, section, page, is_code)` — verbatim text, plus
   provenance (`src/gloss/segment.py:48`). A unit is one contiguous prose run within
-  a section, or a single code block. **This is where verbatim text is fixed.**
+  a section — **including any code block the run introduces** (an example is not
+  usable without its lead-in sentence, so they travel as one unit; prose after the
+  block starts a fresh unit). A one-line code element with no code punctuation
+  arriving mid-run is an inline span the parser misread as a block and folds back
+  into the prose (`_is_inline_fragment`) — this healed real shattered sentences
+  (e.g. "The" / "NetworkErrorLogger" / "class contained…" as three units). Code
+  with no prose in progress stays a standalone `is_code` unit. **This is where
+  verbatim text is fixed.**
 - `section_texts` maps section id -> the section's full concatenated text
   (headings excluded), used as situating context during enrichment.
 
@@ -137,9 +161,10 @@ statement (`src/gloss/store.py:68`).
 | `enrich.py` | per-unit LLM enrichment + JSONL checkpoint/resume; defines the `Enrichment` schema. |
 | `taxonomy.py` | load taxonomy.yaml; map chapter -> principle; render a per-principle card. |
 | `store.py` | SQLite/FTS5 store: DDL, `build_db`, `to_match_query`, `search`. **Stdlib only.** |
+| `vectors.py` | optional semantic channel: `embed_corpus` (vectors into the same db via Ollama `/api/embed`), `search_semantic`, `search_hybrid` (RRF fusion + per-channel rank tags), `search_auto` (graceful degrade). **Stdlib only**; Ollama is a service dependency. |
 | `build.py` | orchestrate parse->segment->enrich->store for one chapter or the whole book; size `num_ctx`. |
-| `evalrun.py` | score retrieval against cases.yaml (top-k hit-rate). |
-| `cli.py` | argparse CLI: `retrieve` (stdlib) / `build` / `eval` (lazy-imported). |
+| `evalrun.py` | score retrieval against cases.yaml: hit@k, hit@1, MRR; injectable `search_fn` for scoring any mode; `paired_sign_flip` significance test for A/B-ing modes or knobs. |
+| `cli.py` | argparse CLI: `retrieve`/`embed` (stdlib) / `build` / `eval` (lazy-imported). |
 
 ## Key seams
 
@@ -163,6 +188,15 @@ Three implementations:
 
 The pipeline (`build.py`, `enrich.py`) never imports a provider — it accepts any
 object satisfying the protocol, which is how tests inject a stub.
+
+### embed_fn (vectors.py)
+
+The vector channel has the same shape of seam one level down: every entry point
+(`embed_corpus`, `search_semantic`, `search_hybrid`, `search_auto`) takes an
+optional `embed_fn(texts) -> list[vector]`. When `None`, a closure over
+`ollama_embed` (stdlib `urllib` against `/api/embed`) is used; tests inject a
+deterministic keyword→axis fake, so the whole channel — packing, chunking,
+scoring, fusion, fallback — is tested with zero network (`tests/test_vectors.py`).
 
 ### Profile (profile.py)
 
@@ -232,6 +266,18 @@ taxonomy (`corpora/aposd/taxonomy.yaml:1`).
    `profile.appendices` ranges are parsed and appended to the chapter specs, then
    enriched with **no principle card** (empty card, `principle=""`)
    (`src/gloss/build.py:80`).
+5. **Query and corpus are embedded the same way.** EmbeddingGemma is prompt-tuned
+   (documents vs queries take different instruction prefixes); the prefixes, model,
+   and centering mean used at embed time are recorded in `vectors_meta`, and the
+   query side reads them back rather than assuming
+   (`src/gloss/vectors.py:_query_vector`). An index/query mismatch in prefix or
+   centering would silently degrade similarity.
+6. **The semantic channel never blocks retrieval.** Explicit `--mode hybrid` /
+   `semantic` fail loudly; the default `auto` mode degrades to lexical — silently
+   for a db that simply has no vectors, with a stderr note when vectors exist but
+   the embedder is down. Checkpoint rows from since-changed unit boundaries are
+   likewise never shipped: `enrich_units` filters read-back rows to the current
+   unit set (`src/gloss/enrich.py`).
 
 ## SQLite schema
 
@@ -257,6 +303,30 @@ CREATE TRIGGER units_ai AFTER INSERT ON units BEGIN
 END;
 ```
 
+After `gloss embed`, the same db additionally carries the semantic channel
+(`src/gloss/vectors.py:_DDL`):
+
+```sql
+CREATE TABLE vectors (
+  unit_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,           -- 'gist' | 'question' | 'text'
+  seq INTEGER NOT NULL,         -- question index / text-chunk index within kind
+  vec BLOB NOT NULL,            -- float32, unit-normalized
+  PRIMARY KEY (unit_id, kind, seq)
+);
+CREATE TABLE vectors_meta (
+  model TEXT NOT NULL, dim INTEGER NOT NULL,
+  doc_prefix TEXT NOT NULL, query_prefix TEXT NOT NULL,
+  center_vec BLOB,              -- corpus mean removed from every vector; NULL = uncentered index
+  created TEXT NOT NULL
+);
+```
+
+Stored vectors are **mean-centered + renormalized** ("all-but-the-top": the corpus
+common direction — large here, one book + a shared instruction prefix — is removed);
+`center_vec` carries the mean so queries get the identical correction. A pre-centering
+index (`center_vec` NULL) still queries, just uncentered.
+
 Notes:
 - **`units` is the source of truth; `units_fts` is only an index** — all data
   lives in `units` (`src/gloss/store.py:1`). `units_fts` is an external-content
@@ -265,12 +335,15 @@ Notes:
 - The `units_ai` AFTER INSERT trigger keeps the FTS mirror in sync on insert.
   `build_db` also runs `INSERT INTO units_fts(units_fts) VALUES ('optimize')`
   after load (`src/gloss/store.py:62`).
-- `key_terms` and `questions` are lists in the row but stored as space-joined
-  strings (`src/gloss/store.py:58`).
+- `key_terms` is stored space-joined; `questions` is stored **newline-joined** so
+  per-question boundaries survive for the vector channel (one vector per
+  question). FTS tokenization is separator-agnostic (`src/gloss/store.py:58`).
 - Custom tokenizer: `porter unicode61 tokenchars '_'` — Porter stemming, with `_`
   treated as a token char so snake_case identifiers survive.
 - BM25 column weights `_WEIGHTS = (10.0, 4.0, 5.0, 8.0, 4.0)` for
   `(text, context_line, applies_when, key_terms, questions)` — verbatim text
   weighted highest (`src/gloss/store.py:31`).
-- A built `aposd` db has 257 rows across the 6 non-null principle slugs (plus
-  empty-principle units) (`sqlite3 build/minimax.db "SELECT count(*) FROM units"`).
+- A built `aposd` db has **197 rows** under code-attach segmentation (257 before
+  it) across the 6 non-null principle slugs plus empty-principle units; embedded,
+  it carries ~1,500 vectors (197 gist + ~1,100 question + ~200 text-chunk) and is
+  ~7 MB (`sqlite3 build/minimax-v2.db "SELECT count(*) FROM units"`).

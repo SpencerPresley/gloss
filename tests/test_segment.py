@@ -18,7 +18,7 @@ def _profile() -> Profile:
                    section_re=r"^(\d+\.\d+)", chapter_re=r"^Chapter\s+(\d+)", chapter_pages={})
 
 
-def test_segment_splits_prose_and_code():
+def test_segment_groups_prose_and_attaches_code():
     els = [
         Element("heading", "Chapter 6", 50, 1),
         Element("heading", "General-Purpose Modules are Deeper", 50, 1),
@@ -29,12 +29,55 @@ def test_segment_splits_prose_and_code():
         Element("para", "This method returns a new position.", 52),
     ]
     units, section_texts = segment(els, _profile(), chapter="6")
-    assert [u.is_code for u in units] == [False, False, True, False]
+    # The code block travels with its lead-in prose; prose after it starts fresh.
+    assert [u.is_code for u in units] == [False, False, False]
     assert units[0].section == "6"            # chapter intro prose, before any 6.x section
-    code = [u for u in units if u.is_code][0]
-    assert code.section == "6.3" and "changePosition" in code.text
+    assert units[1].section == "6.3"
+    assert "better approach" in units[1].text and "changePosition" in units[1].text
+    assert units[2].text == "This method returns a new position."
     assert "better approach" in section_texts["6.3"]
     assert "changePosition" in section_texts["6.3"]   # section text includes code
+
+
+def test_inline_code_span_does_not_shatter_prose():
+    """A one-line code element with no code punctuation mid-prose is an inline
+    span the parser misread as a block; it folds back into the run. Real case
+    from the minimax build: 'The' / 'NetworkErrorLogger' / 'class contained...'
+    became three units, one of them 3 chars long."""
+    els = [
+        Element("para", "The", 120),
+        Element("code", "NetworkErrorLogger", 120),
+        Element("para", "class contained several methods.", 120),
+    ]
+    units, _ = segment(els, _profile(), chapter="9")
+    assert len(units) == 1 and not units[0].is_code
+    assert units[0].text == "The\nNetworkErrorLogger\nclass contained several methods."
+
+
+def test_real_one_line_code_attaches_and_closes_unit():
+    """One-line code WITH code punctuation is a real display (a signature), not
+    an inline span: it merges with its lead-in and closes the unit."""
+    els = [
+        Element("para", "The backspace key can be implemented as follows:", 52),
+        Element("code", "void backspace(Cursor cursor);", 52),
+        Element("para", "This approach keeps the caller simple.", 52),
+    ]
+    units, _ = segment(els, _profile(), chapter="6")
+    assert len(units) == 2
+    assert not units[0].is_code
+    assert "as follows:" in units[0].text and "void backspace" in units[0].text
+    assert units[1].text == "This approach keeps the caller simple."
+
+
+def test_code_without_lead_in_stays_standalone():
+    els = [
+        Element("heading", "6.3 A more general-purpose API", 52, 2),
+        Element("code", "Position changePosition(Position position, int numChars);", 52),
+        Element("para", "Explanation after the block.", 52),
+    ]
+    units, _ = segment(els, _profile(), chapter="6")
+    assert units[0].is_code and "changePosition" in units[0].text
+    assert not units[1].is_code
 
 
 def test_heading_only_section_is_present_but_empty():

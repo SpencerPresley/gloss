@@ -58,7 +58,8 @@ def test_run_build_single_chapter_still_works(tmp_path, corpus_path):
     chapters = {r["chapter"] for r in con.execute("SELECT DISTINCT chapter FROM units")}
     con.close()
     assert chapters == {"6"}
-    assert len(rows) >= 15
+    # 14 under code-attach segmentation (was 21 when every code block stood alone).
+    assert len(rows) >= 10
 
 
 def test_run_build_indexes_summary_appendices(tmp_path, corpus_path):

@@ -41,6 +41,21 @@ def test_enrich_resumes_without_duplicates(tmp_path):
     assert len(rows) == 2 and ckpt.read_text().count("\n") == 2
 
 
+def test_enrich_drops_stale_checkpoint_rows(tmp_path):
+    """Rows checkpointed under older segmentation rules must not ship into the
+    db: returned rows are filtered to the current unit set (the stale lines stay
+    on disk, harmlessly)."""
+    ckpt = tmp_path / "units.jsonl"
+    enrich_units([RawUnit("old fragment", "6", "6.1", 50)], {"6.1": "s"},
+                 StubExtractor(_STUB), card="C", template=_TEMPLATE, system=_SYSTEM,
+                 checkpoint=ckpt)
+    rows = enrich_units([RawUnit("merged healed unit", "6", "6.1", 50)], {"6.1": "s"},
+                        StubExtractor(_STUB), card="C", template=_TEMPLATE, system=_SYSTEM,
+                        checkpoint=ckpt)
+    assert len(rows) == 1 and rows[0]["text"] == "merged healed unit"
+    assert ckpt.read_text().count("\n") == 2   # old line kept on disk, just not shipped
+
+
 def test_enrich_flags_failure(tmp_path):
     class _Boom:
         model = "boom"

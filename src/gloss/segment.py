@@ -1,7 +1,9 @@
 """Deterministic unit boundaries. Verbatim text is fixed here; the LLM never
-changes it. A unit is a contiguous prose run within a section, or a single code
-block. ``section_texts`` gives the full per-section text used as situating
-context during enrichment.
+changes it. A unit is a contiguous prose run within a section — including any
+code block the run introduces, since an example is not usable without its
+lead-in sentence — or a standalone code block when no prose precedes it.
+``section_texts`` gives the full per-section text used as situating context
+during enrichment.
 """
 from __future__ import annotations
 
@@ -10,6 +12,19 @@ import re
 
 from .parse import Element
 from .profile import Profile
+
+_CODE_CHARS = re.compile(r"[{}();=<>\[\]]|//|/\*")
+
+
+def _is_inline_fragment(text: str) -> bool:
+    """True for a one-line code element that reads as sentence text, not code.
+
+    The parser classifies whole PDF lines by font, so an inline code span that
+    fills its line (a bare class or method name mid-sentence) arrives as a
+    one-line ``code`` element. Real one-line code — a signature, a statement, a
+    comment — carries code punctuation; a bare identifier does not.
+    """
+    return "\n" not in text and not _CODE_CHARS.search(text)
 
 
 def split_chapters(elements: list[Element], profile: Profile) -> list[tuple[str, list[Element]]]:
@@ -50,12 +65,14 @@ class RawUnit:
     """One retrieval unit's verbatim text + provenance, before LLM enrichment.
 
     Attributes:
-        text: The unit's verbatim text — a joined prose run or a single code block.
+        text: The unit's verbatim text — a joined prose run (possibly ending in
+            the code block it introduces) or a standalone code block.
         chapter: The chapter id this unit belongs to (the ``chapter`` segment arg).
         section: The section id (e.g. ``"6.3"``); the chapter id for prose/code
             appearing before the first level-2 heading.
         page: 1-based page number where the unit begins.
-        is_code: ``True`` for a code-block unit, ``False`` for a prose run.
+        is_code: ``True`` only for a standalone code block (no prose lead-in);
+            prose runs and prose+code merged units are ``False``.
     """
 
     text: str
@@ -75,9 +92,13 @@ def segment(elements: list[Element], profile: Profile, chapter: str) -> tuple[li
     section — except a level-1 (chapter) title seen *after* body content has
     begun, which marks the next chapter and stops segmentation (so a
     single-chapter call excludes the following chapter). A contiguous run of
-    ``para`` Elements within a section becomes one
-    prose unit; each ``code`` Element is its own unit; ``figure`` Elements are
-    skipped. Until the first level-2 heading, the section is ``chapter``.
+    ``para`` Elements within a section becomes one prose unit. A ``code``
+    Element arriving mid-run either folds into the run (a one-line fragment
+    with no code punctuation — an inline span the parser misread as a block)
+    or merges with the run and closes the unit (a real block, kept with the
+    prose that introduces it); with no prose in progress it is its own
+    standalone unit. ``figure`` Elements are skipped. Until the first level-2
+    heading, the section is ``chapter``.
 
     Args:
         elements: Parsed structural Elements in reading order.
@@ -126,8 +147,19 @@ def segment(elements: list[Element], profile: Profile, chapter: str) -> tuple[li
         section_texts.setdefault(cur_section, []).append(el.text)
         started = True
         if el.kind == "code":
-            flush_prose()
-            units.append(RawUnit(el.text, chapter, cur_section, el.page, True))
+            if prose and _is_inline_fragment(el.text):
+                # An inline code span the parser misread as a block (e.g. a bare
+                # class name on its own PDF line) would shatter the sentence it
+                # sits in; fold it back into the prose run.
+                prose.append(el.text)
+            elif prose:
+                # A code block introduced by prose: the lead-in sentence is what
+                # makes the example usable, so they travel as one unit. Prose
+                # after the block starts a fresh unit.
+                prose.append(el.text)
+                flush_prose()
+            else:
+                units.append(RawUnit(el.text, chapter, cur_section, el.page, True))
         else:  # para
             if not prose:
                 prose_page = el.page

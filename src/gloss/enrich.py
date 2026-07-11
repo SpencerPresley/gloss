@@ -94,12 +94,14 @@ def _enrich_one(unit: RawUnit, section_texts, extractor: StructuredExtractor, *,
 def enrich_units(units, section_texts, extractor: StructuredExtractor, *,
                  card: str, template: str, system: str, checkpoint: Path,
                  max_workers: int = 1) -> list[dict]:
-    """Enrich each not-yet-checkpointed unit and return all rows.
+    """Enrich each not-yet-checkpointed unit and return the current units' rows.
 
     Serial when ``max_workers <= 1``. Otherwise the first pending unit is enriched serially
     (pinning the extractor's method and warming its client) before the rest run on a thread
     pool; checkpoint writes are serialized by a lock. Rows are appended as they complete, so
-    an interrupted run resumes by key.
+    an interrupted run resumes by key. Returned rows are filtered to the current unit set:
+    a checkpoint written under older segmentation rules resumes cleanly, with rows for
+    since-changed boundaries left on disk but never shipped.
     """
     checkpoint = Path(checkpoint)
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
@@ -127,9 +129,11 @@ def enrich_units(units, section_texts, extractor: StructuredExtractor, *,
             for unit in pending:
                 write(work(unit))
 
+    current = {_key(u) for u in units}
     rows_by_key: dict[str, dict] = {}
     for line in checkpoint.read_text().splitlines():
         if line.strip():
             row = json.loads(line)
-            rows_by_key[row["key"]] = row   # last wins: a resumed success supersedes an earlier failure
+            if row["key"] in current:   # stale rows (older segmentation rules) never ship
+                rows_by_key[row["key"]] = row   # last wins: a resumed success supersedes an earlier failure
     return list(rows_by_key.values())

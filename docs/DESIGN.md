@@ -276,11 +276,51 @@ APOSD instance stays `corpora/aposd/` and its artifact `aposd.db` regardless.
 
 ## Retrieval experiment log (2026-07-10)
 
-Every knob change goes through `corpora/aposd/cases.yaml` (n=31) and, since this session,
+Every knob change goes through `corpora/aposd/cases.yaml` (**n=266 since the Track D merge**;
+history below this point was measured at n=31 — those numbers do not transfer) and
 `gloss eval --mode A --vs B` — a paired sign-flip randomization test on per-case reciprocal rank
-(`evalrun.py:paired_sign_flip`). House rule: **one case ≈ 3 points, so a delta under ~2 cases is
-noise no matter how good the story is** — adopt on p-value, or on measured mechanism + zero
-regressions, and record which.
+(`evalrun.py:paired_sign_flip`). House rule at n=266: **one case ≈ 0.4 points of hit@1** —
+adopt on p-value, or on measured mechanism + zero regressions, and record which. Slice any
+delta by tranche (markers in cases.yaml): a change that helps clean slices but regresses the
+rough/agent-voice slices is a regression for real use.
+
+### n=266 baseline (2026-07-10, post-Track-D merge)
+
+| mode | hit@5 | hit@1 | MRR |
+|---|---|---|---|
+| lexical | 0.79 | 0.52 | 0.61 |
+| semantic | 0.86 | 0.62 | 0.71 |
+| hybrid | **0.91** | **0.67** | **0.77** |
+
+Hybrid-vs-lexical: Δmrr=+0.156, **p<0.0001** (was p=0.037 at n=31). Hybrid-vs-semantic:
+Δmrr=+0.058, **p=0.0054** — a comparison that was uncertifiable at n=31. Ordering
+lexical < semantic < hybrid holds on **every** slice; hybrid regresses nowhere.
+
+Per-tranche (hit@1 / MRR / hit@5, hybrid unless noted):
+
+| slice | n | lexical h1 | semantic h1 | hybrid |
+|---|---|---|---|---|
+| curated | 31 | 0.55 | 0.65 | **0.71** / 0.80 / 0.94 |
+| dev-voice | 145 | 0.55 | 0.67 | **0.69** / 0.79 / 0.94 |
+| agent-voice | 42 | 0.40 | 0.50 | **0.52** / 0.64 / 0.83 |
+| vocab | 20 | 0.70 | 0.80 | **0.90** / 0.95 / 1.00 |
+| rough | 22 | 0.36 | 0.45 | **0.68** / 0.75 / 0.86 |
+| audit | 6 | 0.17 | 0.17 | **0.33** / 0.47 / 0.67 |
+
+Read of the table:
+
+- **Sanity**: the curated slice reproduces the historical n=31 hybrid numbers exactly
+  (0.71/0.80/0.94) — the old and new instruments agree where they overlap.
+- **The genre-alignment hypothesis is now measured, not argued.** Dev-voice (same
+  well-formed-symptom genre as the enrichment questions) scores like curated; the
+  registers the consuming agent actually uses sit far lower — agent-voice 0.52,
+  audit 0.33 (n=6, wide error bars). Honest real-use hit@1 is ≈0.5–0.55, not 0.7.
+- **Hybrid's value concentrates on rough queries**: lexical 0.36 → hybrid 0.68 on the
+  rough slice, the largest lift anywhere — the semantic channel is what absorbs terse,
+  noisy, multi-concern phrasing.
+- **Headroom map for the other tracks**: enrichment (C) and reranking (B) should be
+  judged primarily on the agent-voice and audit slices — that's where the misses live;
+  vocab (0.90) and dev-voice (0.69) are near their practical ceilings.
 
 Measured diagnostics on the embedded corpus (1,493 × 768 vectors):
 
@@ -399,10 +439,15 @@ with `--principle <slug>` when the principle is known, but the eval schema only 
 free-text queries — facet-narrowed retrieval has no cases yet (needs a small evalrun
 extension to pass the filter through).
 
-**Not merged into `cases.yaml`** — human vetting first; approved cases land under a
-`# --- synthetic set ... ---` marker so curated-vs-synthetic stays separable. After the
-merge: re-baseline all three modes here (keep the n=31 history above, labeled) and re-run
-every per-track `--vs` comparison — n=31 numbers do not transfer.
+**Merged 2026-07-10** after vetting: all 235 cases landed in `cases.yaml` under the
+`# --- synthetic set ... ---` marker, tranche markers and per-unit provenance carried
+over; the staging file was removed (history in git). Baseline at n=266 recorded at the
+top of this log. Remaining follow-ups: tracks that measured at n=31 re-run their `--vs`
+comparisons; after Track C rebuilds the corpus, re-run `screen_candidates.py` against the
+new db (`--candidates corpora/aposd/cases.yaml`) so any coincidental new-metadata
+collisions are visible when interpreting C's lift. Noted gap, not urgent: the skill
+recommends `--principle` narrowing but the eval schema only scores free-text — facet
+cases need a small evalrun extension first.
 
 ---
 
@@ -411,10 +456,11 @@ every per-track `--vs` comparison — n=31 numbers do not transfer.
 gloss is **early** and a **working prototype, not a finished product**. The full APOSD corpus builds
 end-to-end, hybrid retrieval scores hit@5=0.94 / hit@1=0.71 / MRR=0.80 on the eval set, but:
 
-- The eval set is **31 cases** (16 original + 15 situation-phrased, including three regression
-  anchors from live probing). Better than 16, still small — one case ≈ 3 points, so treat deltas
-  under ~2 cases as noise. Never copy a stored `questions` string into a case (that grades the
-  index on its own training data).
+- The eval set is **266 cases** (31 curated + 235 synthetic in five sliceable tranches; see
+  the experiment log). One case ≈ 0.4 points of hit@1. The realistic-register slices score
+  well below the headline (agent-voice 0.52, audit 0.33 hybrid hit@1) — treat those as the
+  honest real-use estimate. Never copy a stored `questions` string into a case (that grades
+  the index on its own training data); screen additions with `screen_candidates.py`.
 - Real-world usefulness **hasn't been battle-tested** beyond one external live-probe session.
 - BM25 `_WEIGHTS` remain untuned defaults; the RRF constant and pool were swept once (rrf_k 20/60/100
   × pool 30/50/100 — flat except the rrf_k=20 top-rank effect, see §2).

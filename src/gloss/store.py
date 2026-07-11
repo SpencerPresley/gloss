@@ -56,7 +56,9 @@ def build_db(rows: list[dict], db_path: Path) -> None:
             "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             [(r["principle"], r["chapter"], r["section"], r["type"], r["page"], r["text"],
               r["context_line"], r["applies_when"], " ".join(r["key_terms"]),
-              " ".join(r["questions"]), r["enrich_model"], r.get("needs_enrich", 0))
+              # questions join on newline so per-question boundaries survive for the
+              # vector channel (one vector per question); FTS tokenization doesn't care.
+              "\n".join(r["questions"]), r["enrich_model"], r.get("needs_enrich", 0))
              for r in rows],
         )
         con.execute("INSERT INTO units_fts(units_fts) VALUES ('optimize')")

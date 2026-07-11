@@ -342,8 +342,8 @@ C-speed; stdlib-only portability is a core invariant).
 
 ### Track D: eval-set expansion — candidates drafted, pending vetting (2026-07-10)
 
-Future-path #1 executed to the candidate stage: **187 candidate cases** in
-`corpora/aposd/cases-candidates.yaml`, in two tranches:
+Future-path #1 executed to the candidate stage: **207 candidate cases** in
+`corpora/aposd/cases-candidates.yaml`, in three tranches:
 
 - **Dev-voice (145)**: situation-phrased first-person symptom queries, drafted from 82
   stratified source units (every chapter ≥1 case, chs 1–20 ≥3; all six principles plus the
@@ -355,15 +355,24 @@ Future-path #1 executed to the candidate stage: **187 candidate cases** in
   observed code, concrete identifiers, python/asyncio vocabulary). Drafted **forward**
   (workflow simulation → query → pin located by reading unit text), which is the realistic
   direction. Includes 8 deliberate voice-pairs of dev-voice cases (marked) to measure voice
-  robustness. Post-skill queries that reuse book vocabulary are deliberately excluded — the
-  leakage firewall can't tell them from index echo; the query-log path (#2) covers those.
+  robustness.
+- **Vocab (20)**: term-driven queries in two flavors — *folk synonyms* the book never uses
+  verbatim ("leaky abstraction", "god class", "YAGNI": pure folk-term → book-concept
+  bridging) and *variant forms* of book terms ("passthrough params", "push complexity down
+  the stack", "errors defined away": tokenization/morphology robustness). These skew
+  lexically easy-to-collide rather than easy-to-rank: the corpus mentions the root words
+  everywhere, so the test is whether the *canonical* passage outranks passages that merely
+  use the term (the reranker's regression net). A third flavor — exact book terms needing a
+  screen exemption ("shallow module" is in `key_terms` by design) — was considered and
+  **declined** to keep the metadata-overlap guarantee absolute; the query-log path (#2)
+  will capture those with genuine provenance.
 
 Both tranches leakage-screened by `corpora/aposd/screen_candidates.py` (stdlib): zero
 word-4-gram overlap with `questions`/`key_terms`/`context_line`/`applies_when`, plus
 warnings for quoting source text, echoing an existing case, or colliding with another
 candidate (all cleared; exact in-file duplicates are a hard fail). Candidates were **not**
 filtered by what the current system retrieves (anti-Goodhart); admissibility was
-well-posedness only. A simulated merge scores well-formed: 218 cases, 6/6 principles, no
+well-posedness only. A simulated merge scores well-formed: 238 cases, 6/6 principles, no
 duplicate queries.
 
 **Not merged into `cases.yaml`** — human vetting first; approved cases land under a

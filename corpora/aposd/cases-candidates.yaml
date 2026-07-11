@@ -685,3 +685,92 @@ cases:
   # u135 14.2 definition | refactor
   - query: "picking between two candidate names for the method that merges two configs"
     expect_chapter: "14"
+
+  # ==== vocab tranche (2026-07-10): folk synonyms + variant forms ====
+  # Two flavors of term-driven queries, both passing the STRICT screen (no
+  # metadata-overlap exemptions — the exact-term flavor that would have needed
+  # a screen carve-out was considered and declined):
+  #   [folk]    developer/agent vocabulary the book never uses verbatim
+  #             ("leaky abstraction", "god class", "YAGNI") — pure
+  #             folk-term -> book-concept semantic bridging.
+  #   [variant] morphological/compositional variants of book terms
+  #             ("passthrough params", "push complexity down", "errors defined
+  #             away") — tokenization + morphology robustness; FTS5 won't
+  #             bridge these lexically unless the tokenizer stems, so they
+  #             probe whether the vector channel covers the gap.
+  # These skew lexically easy-to-collide, not easy-to-rank: the corpus mentions
+  # the root words everywhere, so the test is whether the CANONICAL passage
+  # outranks passages that merely use the term. Sliceable as a block.
+
+  # -- [folk] --
+  # u18 4.3 definition | folk (also answered by ch5 leakage units)
+  - query: "this API feels like a leaky abstraction"
+    expect_section: "4.3"
+    expect_principle: information-hiding
+  # u67 9 definition | folk
+  - query: "classic god class, it does everything"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u40 6 definition | folk
+  - query: "is this a YAGNI situation or should I build the general version now"
+    expect_principle: general-purpose
+  # u190 20.1 rationale | folk
+  - query: "premature optimization or legitimate design concern"
+    expect_section: "20.1"
+  # u70 9.3 rationale | folk
+  - query: "DRY violation, but deduplicating would need a six-argument helper"
+    expect_section: "9.3"
+  # u57 7.3 red_flag | folk | vocab-pair of "I keep writing wrapper classes..."
+  - query: "wrapper hell, every feature adds another layer of wrapping"
+    expect_section: "7.3"
+    expect_principle: information-hiding
+  # u21 4.6 red_flag | folk | vocab-pair of "team dogma says smaller classes..."
+  - query: "single responsibility taken to the extreme, every class does one tiny thing"
+    expect_section: "4.6"
+    expect_principle: deep-modules
+  # u13 3.4 rationale | folk
+  - query: "the code went full spaghetti, where do we even start"
+    expect_section: "3.4"
+    expect_principle: strategic-programming
+  # u67 9 definition | folk
+  - query: "separation of concerns, where exactly to draw the line"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u114 13.3 definition | folk
+  - query: "magic numbers with no explanation of what they mean"
+    expect_section: "13.3"
+    expect_principle: comments
+  # u11 3.2 definition | folk
+  - query: "when does tech debt actually get paid down"
+    expect_principle: strategic-programming
+
+  # -- [variant] --
+  # u59 7.5 definition | variant ("passthrough" as one token)
+  - query: "passthrough params on every layer"
+    expect_section: "7.5"
+    expect_principle: information-hiding
+  # u16 4.1 definition | variant (deep/shallow as bare adjectives)
+  - query: "deep vs shallow classes, which to prefer and when"
+    expect_principle: deep-modules
+  # u62 8 rationale | variant (push/down vs pull/downward)
+  - query: "push complexity down the stack instead of up to callers"
+    expect_chapter: "8"
+  # u20 4.5 red_flag | variant
+  - query: "my classes are too shallow, how do I deepen them"
+    expect_principle: deep-modules
+  # u28 5.1 definition | variant
+  - query: "info hiding versus just marking the fields private"
+    expect_section: "5.1"
+    expect_principle: information-hiding
+  # u82 10.2 rationale | variant (compressed form of the ch10 principle)
+  - query: "errors defined away instead of thrown"
+    expect_chapter: "10"
+  # u87 10.7 definition | variant (gerund form)
+  - query: "aggregating exception handling high up in the stack"
+    expect_section: "10.7"
+  # u86 10.6 definition | variant
+  - query: "masking errors down low so callers stay oblivious"
+    expect_section: "10.6"
+  # u93 11 definition | variant (scope-of-principle question)
+  - query: "does design it twice apply to small classes or only big systems"
+    expect_chapter: "11"

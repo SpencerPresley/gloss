@@ -260,6 +260,45 @@ The startup line `chapters=N units=M num_ctx=C model=...` is printed before enri
 
 ---
 
+## `enrich-questions`
+
+Second-pass **question top-up** over a build's checkpoints: for every enriched unit,
+ask the model for 4–6 *new* retrieval questions from angles the first pass didn't
+cover (mid-task complaint, code-review comment, "is it OK to…" permission phrasing,
+"what goes wrong if…" consequence phrasing). Widens the semantic net — one vector per
+question, and question vectors win ~80% of semantic matches. Build-only deps
+(lazy-imported); prompt template is the instance's
+[`prompt-questions.md`](../corpora/aposd/prompt-questions.md).
+
+```
+gloss enrich-questions [-h] --build-dir BUILD_DIR [--model MODEL] [--workers WORKERS]
+```
+
+| Arg | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `--build-dir` | str | **required** | Checkpoint root of the build to top up (e.g. `build/minimax-v2`). Required — no default, so a typo can't silently top up nothing. |
+| `--model` | str | `minimax-m3:cloud` | Ollama model for the top-up, recorded per-row in `topup_model`. |
+| `--workers` | int | `1` | Concurrent top-up requests. |
+
+Writes **checkpoints only, never the db**: each topped-up unit gets an appended row
+copy with `questions = old + new` under the same key, superseding the original on
+read-back (last-wins). Ship it with the zero-quota rebuild + re-embed dance:
+
+```bash
+uv run --extra build gloss enrich-questions --build-dir build/minimax-v2 \
+    --model minimax-m3:cloud --workers 8
+uv run --extra build gloss build --resume --db build/minimax-v2.db --build-dir build/minimax-v2
+uv run gloss embed --db build/minimax-v2.db   # rebuild wiped the vectors
+```
+
+Resumable: rows whose current version carries `topup_model` are skipped; a failed
+unit gets **no** appended row and is re-attempted on the next run. Failed-enrichment
+rows (`needs_enrich=1`) are skipped — resume the build first. Stale checkpoint rows
+(older segmentation rules) get topped up too — wasted calls but harmless, they never
+ship.
+
+---
+
 ## `eval`
 
 Score retrieval against eval cases: hit@k, hit@1, and MRR — the last two are

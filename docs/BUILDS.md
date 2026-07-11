@@ -125,6 +125,42 @@ uv run --extra build gloss build --resume \
   (`cp -r build/minimax build/minimax-v2`, then `--resume`), and the old fragments'
   rows were filtered out at read-back rather than shipped.
 
+## Question top-up (`enrich-questions`)
+
+A second enrichment pass that **widens each unit's question set** without touching
+anything else (`topup.py`): for every enriched checkpoint row (deduped by key,
+`needs_enrich=0` only) it asks the model for 4–6 new questions from angles the first
+pass didn't cover, then appends a row copy with `questions = old + new` and a
+`topup_model` marker. Same key ⇒ the appended row supersedes the original at
+read-back (last-wins), so the top-up rides the existing checkpoint mechanics:
+
+- **Persistence is checkpoint-only.** The db never learns about the top-up until the
+  next rebuild, and a rebuild can't lose it. Ship with the zero-quota dance:
+
+  ```bash
+  uv run --extra build gloss enrich-questions --build-dir build/minimax-v2 \
+      --model minimax-m3:cloud --workers 8
+  uv run --extra build gloss build --resume --db build/minimax-v2.db --build-dir build/minimax-v2
+  uv run gloss embed --db build/minimax-v2.db   # rebuild wiped the vectors (CLAUDE.md fact #3)
+  ```
+
+  The `--resume` does zero LLM work (all keys present) and ships the merged
+  questions; the `embed` regenerates the per-question vectors — the whole point of
+  the top-up (one vector per question; question vectors carry the semantic channel).
+
+- **Resumable like enrichment**, with an inverted failure convention: a unit whose
+  top-up fails gets **no appended row** (nothing baked in), so the next run
+  re-attempts exactly the rows still missing the `topup_model` marker. Failed
+  original rows (`needs_enrich=1`) are skipped — `build --resume` them first.
+- **Same concurrency model** as enrichment (serial warmup pins the extractor
+  method, then a thread pool; appends serialized by a lock), same `--workers` flag.
+- Stale rows (older segmentation rules) are topped up too — wasted calls, but
+  harmless: read-back filters them before they ship. The 2026-07-10 top-up ran 316
+  checkpoint rows for 197 live units for exactly this reason.
+- Prompt: the instance's `prompt-questions.md` (same `<!-- SYSTEM -->` /
+  `<!-- TEMPLATE -->` convention as `prompt.md`, which stays untouched), with
+  `{card}`, `{passage}`, `{questions}` placeholders.
+
 ## `--workers` concurrency model
 
 `--workers N` (default `1`) sets concurrent enrichment requests **per chapter**
@@ -229,8 +265,8 @@ Get exact tags with `ollama ls`. The two cloud models we use:
 | MiniMax M3 | `minimax-m3:cloud` |
 | GLM 5.2 | `glm-5.2:cloud` |
 
-The CLI default is `--model minimax-m3:cloud` (`cli.py:58`). Both produced 257 units / 0
-failures on the full book.
+The CLI default is `--model minimax-m3:cloud` (`cli.py`). Both build the full book with
+0 failures.
 
 **A/B two models** by building a db with each (own `--db` + `--build-dir`) and scoring
 `corpora/aposd/cases.yaml` (31 cases as of 2026-07-10):
@@ -257,9 +293,16 @@ DESIGN.md's experiment log):
 Hybrid-vs-lexical: Δmrr=+0.136, p=0.037 (`gloss eval --db build/minimax-v2.db
 --mode hybrid --vs lexical`).
 
+On the expanded eval (k=5, n=266, hybrid): `build/glm5-2.db` (glm-5.2:cloud, original
+prompt, embedded) scores hit@1 0.654 / MRR 0.752 / hit@5 0.887 vs minimax-v2's
+0.673/0.770/0.914 pre-top-up and 0.684/0.780/0.917 post-top-up — minimax ahead but not
+significantly (Δmrr=+0.018, p=0.35 on the same-prompt A/B); per-slice numbers and the
+question-top-up experiment live in DESIGN.md's log. Note the glm build has had **no
+question top-up**.
+
 (Historical: the old 16-case set scored minimax at 0.75; a devstral-vs-minimax A/B from
-the handoff notes isn't reproducible from what's checked in. GLM 5.2 has no eval number
-on record.) See [DESIGN.md](DESIGN.md) for the decision rationale.
+the handoff notes isn't reproducible from what's checked in.) See
+[DESIGN.md](DESIGN.md) for the decision rationale.
 
 ## Troubleshooting
 

@@ -353,12 +353,46 @@ Measured diagnostics on the embedded corpus (1,493 × 768 vectors):
   #vectors-per-unit vs top-5 appearances correlates at r=0.15. No correction warranted at this
   corpus size.
 
+**Corpus-side finding — question top-up (Track C, measured 2026-07-10/11).** Design:
+second enrichment pass (`gloss enrich-questions`) asked minimax-m3:cloud for 4–6 NEW
+questions per unit from angles the first pass didn't cover (mid-task complaint,
+code-review comment, permission phrasing, consequence phrasing); prompt written from
+passage + principle card only, cases.yaml never opened (anti-Goodhart); 316 checkpoint
+rows topped up, 0 failures, questions/unit 5.4 → 10.4, vectors 1,493 → 2,500. Result
+(hybrid, n=266, paired vs the pre-top-up snapshot): **hit@1 0.673 → 0.684, MRR
+0.770 → 0.780, hit@5 0.914 → 0.917; Δmrr=+0.010, p=0.53** (35 better / 32 worse /
+199 same). Adopted on the track gate — net non-negative on every aggregate with the
+gain concentrated in real-use registers — explicitly *not* on p-value. Per-slice:
+**rough hit@1 0.68 → 0.82, MRR 0.75 → 0.86** (the terse/noisy register the top-up
+targets); dev-voice +0.01; agent-voice/audit/curated flat; vocab −0.05 (one case,
+n=20). 8 prior misses recovered (incl. the temporal-decomposition motivator, now
+rank 4) against 7 new misses — real churn, not a free lunch; the hidden-dependencies
+motivator (complexity) is still missed. Channel decomposition shows the mechanism:
+each single channel's hit@1 *dropped* (lexical 0.52 → 0.50, semantic 0.62 → 0.59)
+while semantic hit@5 rose 0.86 → 0.89 — the top-up is a **recall widener**, and RRF
+fusion is what converts the widened top-5 into hybrid #1 gains. Multiplicity probe,
+re-baselined at n=266 (the r=0.15 on record was measured at n=31): #vectors-per-unit
+vs top-5 appearances r=0.384 *pre* top-up → **0.449 post** — past the ~0.4 flag line,
+so flagged here, but the top-up itself added only +0.065 and the worst hub shrank
+(28 → 26 appearances of 266). Candidate correction (mean-of-top-2 max-sim) stays
+unimplemented until someone measures it.
+
+**Enrichment-model A/B — glm-5.2:cloud vs minimax-m3:cloud (2026-07-11).** Same
+segmentation (197 units), same original prompt, own db (`build/glm5-2.db`, embedded):
+glm hybrid = hit@1 0.654 / MRR 0.752 / hit@5 0.887 vs minimax pre-top-up
+0.673/0.770/0.914 — **Δmrr=+0.018 minimax, p=0.35**; vs minimax post-top-up
+Δmrr=+0.027, p=0.19. Neither significant; per-slice, minimax's edge is agent-voice
+(0.52 vs 0.43 hit@1) while glm wins vocab (0.95 vs 0.90). Verdict: keep minimax-v2
+as the live corpus; glm-5.2 is a credible fallback enricher, and its build has not
+had a question top-up (running one would be the fair post-top-up comparison).
+
 **Adopted:**
 
 | change | eval effect | verdict basis |
 |---|---|---|
 | Mean-centering ("all-but-the-top" k=1): docs centered+renormalized at embed, mean stored in `vectors_meta.center_vec`, query centered identically | hybrid hit@1 0.61→0.71, MRR 0.74→0.80; centered-vs-raw is 3 better / **0 worse** / 28 unchanged (p=0.25 alone); pushed hybrid-vs-lexical from p=0.27 to **p=0.037** | measured mechanism + strictly monotone improvement; standard practice (*all-but-the-top*, Mu & Viswanath 2018) |
 | rrf_k=20 (vs the literature's 60) | +1 case hit@5, nothing worse | mechanism (short-list dilution, §2), explicitly *not* a p-value |
+| Question top-up (`enrich-questions`, `topup.py`): +4–6 differently-angled questions per unit via checkpoint supersede, then rebuild + re-embed | hybrid hit@1 0.673→0.684, MRR 0.770→0.780, hit@5 0.914→0.917 (n=266, p=0.53); rough slice hit@1 0.68→**0.82**; 8 misses recovered / 7 introduced | track gate (net non-negative + recovered misses) + measured mechanism (recall widener: semantic hit@5 +0.03, fusion converts it) — *not* a p-value; details in the corpus-side finding above |
 | Opt-in gated LLM rerank (`--rerank`, `rerank.py`): listwise judgment of the top-5, **skipped when fusion's #1 is dual-backed** (lexical #1 + semantic ≤5) | with `gemma4:31b-cloud`: hit@1 0.71→**0.84**, MRR 0.80→**0.88** (p=0.13), 4 promotions / **0 demotions-from-#1**, ~0.9s per gated call (~⅓ of queries skip the call); local-default `gemma4:e2b` gated: 24/31, 0 demotions | mechanism: every reranker tried (gemma 2B/31B, minimax, glm) demoted the *same* dual-backed #1s while its wins came from weakly-backed ones — two agreeing channels beat one model's read, so the gate lets the model judge only the uncertain cases. Gate policy was *selected* on the 31-case set (5 candidates compared) → **revalidate on the expanded eval**. Prompt is corpus-agnostic with a keep-given-order clause (damps near-tie churn) and a `--rerank-prompt` per-corpus override; follow-up idea on record: store a corpus-tuned rerank prompt in the db at build time. Fallback contract: any failure keeps the original order. |
 
 **Rejected after measurement:**

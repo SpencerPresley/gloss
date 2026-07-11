@@ -1,12 +1,12 @@
 # CLI Reference
 
-The `gloss` console script ([`src/gloss/cli.py`](../src/gloss/cli.py)) has four subcommands: `retrieve` and `embed` (query-side, stdlib packages only), `build`, and `eval`. A subcommand is **required** — running `gloss` with no args exits non-zero.
+The `gloss` console script ([`src/gloss/cli.py`](../src/gloss/cli.py)) has five subcommands: `retrieve`, `show`, and `embed` (query-side, stdlib packages only), `build`, and `eval`. A subcommand is **required** — running `gloss` with no args exits non-zero.
 
 ```
-gloss [-h] {retrieve,embed,build,eval} ...
+gloss [-h] {retrieve,show,embed,build,eval} ...
 ```
 
-`retrieve` and `embed` import only stdlib modules (`store` / `vectors`) — though `embed` and the hybrid retrieve modes additionally need a **running local Ollama** (a service, not a package). `build` and `eval` lazily import their build-only deps inside the command function, so `retrieve` never pulls them in. Run query-side commands with plain `uv run gloss ...`; run `build`/`eval` with `uv run --extra build gloss ...` (eval needs `pyyaml`; see [Errors](#error--exit-behavior)).
+`retrieve`, `show`, and `embed` import only stdlib modules (`store` / `vectors`) — though `embed` and the hybrid retrieve modes additionally need a **running local Ollama** (a service, not a package). `build` and `eval` lazily import their build-only deps inside the command function, so `retrieve` never pulls them in. Run query-side commands with plain `uv run gloss ...`; run `build`/`eval` with `uv run --extra build gloss ...` (eval needs `pyyaml`; see [Errors](#error--exit-behavior)).
 
 ---
 
@@ -18,7 +18,8 @@ embedder is reachable, plain BM25 otherwise.
 
 ```
 gloss retrieve [-h] --db DB [-k K] [--principle PRINCIPLE] [--type TYPE] [--json]
-               [--mode {auto,lexical,hybrid,semantic}] [--ollama-url URL] query
+               [--compact] [--mode {auto,lexical,hybrid,semantic}] [--ollama-url URL]
+               query
 ```
 
 | Arg | Type | Default | Meaning |
@@ -29,6 +30,7 @@ gloss retrieve [-h] --db DB [-k K] [--principle PRINCIPLE] [--type TYPE] [--json
 | `--principle` | str, repeatable | `None` | Filter to one or more coarse principle slugs. `action="append"` — pass the flag once per value ([cli.py:51](../src/gloss/cli.py#L51)). |
 | `--type` | str, repeatable | `None` | Filter to one or more unit types. `action="append"` ([cli.py:52](../src/gloss/cli.py#L52)). |
 | `--json` | flag | off | Emit the raw list of row dicts as indented JSON instead of formatted text. |
+| `--compact` | flag | off | **Text mode only.** Hit #1 renders in full as usual; ranks 2..k render as one `more:` preview line each (see [Output: `--compact`](#output---compact)). With `--json` the flag is a no-op — JSON output is byte-identical with or without it. |
 | `--mode` | choice | `auto` | `auto` = hybrid when the db has vectors and Ollama answers, else lexical (silently for a vector-less db, with a stderr note when vectors exist but the embedder is down). `lexical` = BM25 only, never touches vectors. `hybrid` = BM25 + vectors via RRF, **fails loudly** (`SystemExit`) if the channel can't run. `semantic` = vectors only (ablation/debugging). |
 | `--ollama-url` | str | `http://localhost:11434` | Ollama base URL for query embedding (all modes except `lexical`). |
 | `--rerank` | flag | off | LLM-rerank the top candidates (fetches ≥5 even at `-k 1`, returns top-k). **Gated**: when fusion's #1 is dual-backed (lexical #1 + semantic top-5) it is trusted and no model call happens — measured, every reranker's mistakes cluster on exactly those (`rerank.py:fusion_trusts_top1`). On any failure (model missing, bad reply) the original order is kept with a stderr note; reordered hits carry `reranked: true`. |
@@ -58,6 +60,35 @@ Information hiding and deep modules are closely related. If a module hides a lot
 of information, that tends to increase the amount of functionality provided by the
 module ...
 ```
+
+### Output: `--compact`
+
+For agent consumption: k=3 shouldn't cost three full passages of tokens. Hit #1 renders
+exactly as in default text mode (citation header + verbatim passage); each runner-up
+becomes a single pointer line:
+
+```
+more: id=<id> [<citation>] (<type> via <tags>) — <context_line>
+```
+
+The preview body is the unit's generated `context_line` — a **paraphrase**, acceptable
+only because it is labeled as a pointer and never presented as the passage (the
+verbatim promise applies to passage bodies). It is whitespace-collapsed and truncated
+at ~140 chars with a trailing `…`. To read a runner-up's actual text, expand it with
+[`gloss show <id>`](#show) — never quote a preview line.
+
+```console
+$ uv run gloss retrieve "callers must call setup in the right order" --db build/minimax-v2.db -k 3 --compact
+[deep-modules §9.6 p.76] (red_flag via lex#8+sem#2)
+The NetworkErrorLogger class contained several methods ...
+
+more: id=34 [information-hiding §5.7 p.46] (example via lex#3+sem#18) — Illustrates partial information hiding through defaults: forcing callers to specify values (like HTTP response version or Date) they should…
+more: id=54 [information-hiding §7 p.56] (definition via lex#29+sem#3) — Opening definition: a well-designed layered system exposes a different abstraction at each layer, so that the concept changes with every me…
+```
+
+`--compact` never changes *which* units are returned or their order — it is purely an
+output-shape concern. With no hits it still prints `(no matches)`; with one hit it is
+identical to default text mode.
 
 ### Output: `--json`
 
@@ -128,6 +159,35 @@ uv run gloss retrieve "shallow helper manager" --db build/minimax-v2.db \
 # force a mode
 uv run gloss retrieve "boolean flag for one caller" --db build/minimax-v2.db --mode hybrid
 uv run gloss retrieve "boolean flag for one caller" --db build/minimax-v2.db --mode lexical
+```
+
+---
+
+## `show`
+
+Print one unit in full by id ([`store.py:get_unit`](../src/gloss/store.py), one SELECT,
+stdlib only). Same rendering as a retrieve hit — citation header + verbatim passage —
+plus a trailing `applies when:` line (the LLM-generated applicability note, useful for
+confirming fit). This is the expansion step for a `--compact` preview line: the preview
+shows a paraphrase; `show` gives you the source's actual words.
+
+```
+gloss show [-h] --db DB id
+```
+
+| Arg | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `id` | positional, int | *(required)* | `units.id` primary key, as printed in a `more: id=N …` preview line or the `id` field of `--json` output. |
+| `--db` | str | **required** | Path to the SQLite/FTS5 corpus db. |
+
+No `via` channel tag appears — a direct lookup has no retrieval channels. An unknown id
+exits non-zero with `gloss show: no unit with id=N in <db>` on stderr.
+
+```console
+$ uv run gloss show 34 --db build/minimax-v2.db
+[information-hiding §5.7 p.46] (example)
+The HTTP projects also had to provide support for generating HTTP responses. ...
+applies when: You're designing an API and the caller must pass a value that the system already knows ...
 ```
 
 ---
@@ -293,6 +353,7 @@ has none).
 | `retrieve` / `eval` against a db with no `units_fts` table (e.g. a fresh 0-byte `build/aposd.db`) | `sqlite3.OperationalError: no such table: units_fts` — uncaught traceback ([store.py:93](../src/gloss/store.py#L93)). See [BUILDS.md](BUILDS.md) for the 0-byte-db gotcha. |
 | `eval` (or any build-extra command) run without the `build` extra | `ModuleNotFoundError: No module named 'yaml'`. Use `uv run --extra build`. |
 | `retrieve --mode hybrid`/`semantic` against a db with no vectors, or with Ollama down | `SystemExit: gloss retrieve --mode …: db has no vectors — run: gloss embed …` (or `embedder unreachable at <url>`). Explicit modes fail loudly. |
+| `show <id>` where no unit has that id | `SystemExit: gloss show: no unit with id=N in <db>` — non-zero exit, message on stderr. |
 | `retrieve` (auto mode) when vectors exist but the embedder is down | Falls back to lexical and prints `gloss: semantic channel off (…); lexical only` to **stderr**; results still returned. |
 | `embed` with Ollama down / model not pulled | Uncaught `urllib.error.URLError`/`HTTPError` traceback — loud by design. Start Ollama / `ollama pull embeddinggemma`. |
 | `build --chapter X` where `X` isn't detected | `raise SystemExit("chapter 'X' not found by detection/override")` ([build.py:86](../src/gloss/build.py#L86)). |

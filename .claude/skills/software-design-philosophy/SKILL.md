@@ -35,6 +35,12 @@ uv run gloss retrieve "<symptom-phrased query>" --db build/minimax-v2.db -k 3 --
 - Phrase the query as a developer's *symptom* ("callers have to call setup in the right
   order", "my class just forwards calls and adds nothing"), not book vocabulary
   ("temporal decomposition").
+- **Rewrite before you query.** Expand a terse, noisy, or multi-concern situation into
+  ONE complete symptom sentence covering ONE concern ("big function split?" → "is a long
+  function that does several sequential things automatically a problem"); fire separate
+  queries for separate concerns. Measured effect: ~+7 points hit@1 on realistic queries.
+  If the situation is already a well-formed single-concern symptom sentence, use it
+  as-is — over-elaborating an already-sharp query makes results worse.
 - When you already know which principle applies, narrow with `--principle <slug>`. The
   slugs are the six principles below: `complexity`, `deep-modules`,
   `information-hiding`, `general-purpose`, `comments`, `strategic-programming`.

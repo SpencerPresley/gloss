@@ -332,14 +332,15 @@ agent-voice 0.52→0.60, rough +0.078 (sub-slice p's underpowered at their n); c
 flat (+0.015, p=0.83 — those were already hand-tuned symptom phrasings). The gain is
 *not* book-vocab injection (the skill forbids that and the rewrites comply) — it's
 expansion of terse/noisy fragments into full, single-concern symptom sentences, which
-the embedder matches far better. Implication, cheapest first: (1) the skill should
-explicitly instruct a pre-query rewrite ("expand the situation into one complete
-symptom sentence before querying") — zero infra, the consuming agent is already an
-LLM; (2) a `--rewrite` step in the retrieval path (Ollama-as-service, same pattern as
-Track B's reranker) if (1) proves insufficient. Caveat: 30/266 got worse, mostly
-over-elaboration of already-good queries — rewrite guidance should say "expand terse
-queries; leave well-formed ones alone." Rewriter was a frontier model; weaker
-rewriters need their own measurement.
+the embedder matches far better. Exploited via the skill: SKILL.md's query section now
+instructs a pre-query rewrite ("expand into one complete single-concern symptom
+sentence; leave already-sharp queries alone") — zero infra, the consuming agent is
+already an LLM. A `--rewrite` step in the retrieval path was considered and **declined**:
+the queriers are frontier models and the local service model is small — routing their
+queries through a weaker rewriter inverts the quality chain. Don't relitigate without
+a local model measured to at least match frontier rewrite quality. Caveat: 30/266 got
+worse under rewriting, mostly over-elaboration of already-good queries — hence the
+"leave sharp queries alone" clause.
 
 Measured diagnostics on the embedded corpus (1,493 × 768 vectors):
 

@@ -346,7 +346,7 @@ C-speed; stdlib-only portability is a core invariant).
 
 ### Track D: eval-set expansion — candidates drafted, pending vetting (2026-07-10)
 
-Future-path #1 executed to the candidate stage: **240 candidate cases** in
+Future-path #1 executed to the candidate stage: **235 candidate cases** in
 `corpora/aposd/cases-candidates.yaml`, in five tranches:
 
 - **Dev-voice (145)**: situation-phrased first-person symptom queries, drafted from 82
@@ -370,15 +370,19 @@ Future-path #1 executed to the candidate stage: **240 candidate cases** in
   screen exemption ("shallow module" is in `key_terms` by design) — was considered and
   **declined** to keep the metadata-overlap guarantee absolute; the query-log path (#2)
   will capture those with genuine provenance.
-- **Rough (27)**: queries as they actually arrive — terse fragments ("big function
-  split?"), framework/identifier noise ("react component drilling props through 5
-  levels"), multi-concern rambles, typos, wrong-altitude asks. Rationale: the tranches
-  above are all well-formed prose, which is the same *genre* as the LLM-generated
+- **Rough (22)**: realistic query shapes, calibrated to the *actual* primary querier —
+  the consuming agent with the skill loaded. The skill instructs symptom phrasing, and
+  the agent generalizes before searching (it knows the corpus is book passages: no
+  framework names, no project identifiers, no typos or slang — early drafts with those
+  were culled as unrealistic). Roughness = terse fragments ("big function split?"),
+  multi-concern enumerations, compressed relayed situations, scope-calibration asks
+  ("how much surrounding cleanup is justified while making a small change"). Rationale:
+  the tranches above are all well-formed prose, the same *genre* as the LLM-generated
   enrichment questions even at zero n-gram overlap — a stylistic alignment the string
   screen cannot catch, so clean-tranche scores likely overestimate real use. This slice
   estimates the realistic floor; knob changes should not regress it even when they help
-  the clean slices. Roughness stops where well-posedness ends — every case still has a
-  defensible pin; unanswerable fragments ("is this bad") were dropped as inadmissible.
+  the clean slices. Every case keeps a defensible pin; unanswerable fragments ("is this
+  bad") were dropped as inadmissible.
 - **Audit (6)**: artifact-property sweeps — reviewing a tool's option surface / API /
   error modes against the book, asking the *conditional* judgment ("are config options a
   smell or sometimes legitimate"). Phrased generalized: the querying agent strips
@@ -389,8 +393,11 @@ word-4-gram overlap with `questions`/`key_terms`/`context_line`/`applies_when`, 
 warnings for quoting source text, echoing an existing case, or colliding with another
 candidate (all cleared; exact in-file duplicates are a hard fail). Candidates were **not**
 filtered by what the current system retrieves (anti-Goodhart); admissibility was
-well-posedness only. A simulated merge scores well-formed: 271 cases, 6/6 principles, no
-duplicate queries.
+well-posedness only. A simulated merge scores well-formed: 266 cases, 6/6 principles, no
+duplicate queries. One instrument gap noted for later: the skill recommends narrowing
+with `--principle <slug>` when the principle is known, but the eval schema only scores
+free-text queries — facet-narrowed retrieval has no cases yet (needs a small evalrun
+extension to pass the filter through).
 
 **Not merged into `cases.yaml`** — human vetting first; approved cases land under a
 `# --- synthetic set ... ---` marker so curated-vs-synthetic stays separable. After the

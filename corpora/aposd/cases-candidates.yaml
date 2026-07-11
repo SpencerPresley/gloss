@@ -775,16 +775,16 @@ cases:
   - query: "does design it twice apply to small classes or only big systems"
     expect_chapter: "11"
 
-  # ==== rough tranche (2026-07-10): queries as they actually arrive ====
-  # The tranches above are all well-formed prose — which is the same GENRE as
-  # the LLM-generated enrichment questions, even with zero n-gram overlap. Real
-  # queries share neither strings nor genre: terse fragments, framework nouns
-  # and identifiers as noise, multi-concern rambles, typos, informal register.
-  # This tranche estimates the realistic floor; knob changes should not regress
-  # this slice even if they help the clean slices. Roughness stops where
-  # well-posedness ends: every case here still has a defensible expected
-  # passage (or is OR-pinned); truly unanswerable fragments were dropped.
-  # Some are marked rough-pairs of clean cases (same situation, real register).
+  # ==== rough tranche (2026-07-10): realistic query shapes ====
+  # Calibrated to the ACTUAL primary querier: the consuming agent with
+  # SKILL.md loaded. The skill instructs symptom phrasing, and the agent
+  # generalizes before searching — it knows the corpus is book passages, so
+  # no framework names, no project identifiers, no typos or slang. Roughness
+  # here means terseness, multi-concern enumeration, and compressed relayed
+  # situations. Genre rationale stands: the clean tranches are well-formed
+  # prose in the same register as the enrichment questions; this slice breaks
+  # that alignment and estimates the floor — knob changes should not regress
+  # it. Every case keeps a defensible pin; unanswerable fragments dropped.
 
   # -- terse / underspecified --
   # u74 9.8 rationale | rough
@@ -798,9 +798,6 @@ cases:
   - query: "pointless passthru layer"
     expect_section: "7.1"
     expect_principle: information-hiding
-  # u96 12.2 rationale | rough
-  - query: "comments worth it"
-    expect_principle: comments
   # u82 10.2 rationale | rough
   - query: "error handling everywhere ugly"
     expect_chapter: "10"
@@ -808,9 +805,6 @@ cases:
   - query: "config sprawl"
     expect_section: "8.2"
     expect_principle: general-purpose
-  # u134 14.1 example | rough
-  - query: "naming is hard lol"
-    expect_chapter: "14"
   # u156 16.1 definition | rough
   - query: "when to refactor"
     expect_principle: strategic-programming
@@ -824,70 +818,58 @@ cases:
 
   # -- context noise: identifiers, frameworks, pasted-fragment flavor --
   # u55 7.1 red_flag | rough
-  - query: "UserRepo.save just calls self.db.save and every method in the layer is like this"
+  - query: "the repository save method just calls the db client's save, and the whole layer is like this"
     expect_section: "7.1"
     expect_principle: information-hiding
   # u74 9.8 rationale | rough
-  - query: "django view does validation orm calls emailing and template rendering, 400 lines"
+  - query: "one request handler does validation, database calls, email sending, and response rendering — 400 lines"
     expect_section: "9.8"
     expect_principle: deep-modules
   # u67 9 definition | rough
-  - query: "we have utils.py helpers.py common.py misc.py all doing random stuff"
+  - query: "a pile of grab-bag utility modules with no coherent theme"
     expect_section: "9"
     expect_principle: deep-modules
   # u169 18 definition | rough
-  - query: "call sites look like save(data, true, false) and nobody can read them"
+  - query: "call sites pass bare booleans that nobody can interpret without opening the function"
     expect_chapter: "18"
   # u55 7.1 red_flag | rough
-  - query: "fastapi service layer is 1:1 with the repository layer, feels dumb but every tutorial does it"
+  - query: "service layer sits 1:1 on top of the repository layer, feels pointless but every tutorial does it"
     expect_section: "7.1"
     expect_principle: information-hiding
   # u59 7.5 definition | rough (prop drilling ~ threading a value through layers)
-  - query: "react component drilling props through 5 levels"
+  - query: "a value gets handed down through five ui layers that never use it themselves"
     expect_section: "7.5"
     expect_principle: information-hiding
   # u96 12.2 rationale | rough
-  - query: "TODO comments from 2019 still in the code, half the functions have no docs at all"
+  - query: "stale TODO comments everywhere and half the functions have no docs"
     expect_principle: comments
   # u182 19.1 definition | rough
-  - query: "our BaseManager class has 40 methods, subclasses use maybe 3"
+  - query: "base class exposes forty methods, subclasses use maybe three"
     expect_section: "19.1"
     expect_principle: deep-modules
 
   # -- multi-concern rambles (pinned to the dominant concern, OR where honest) --
   # u59 7.5 definition | rough
-  - query: "this module has a config dict passed into everything, methods that just forward to other methods, and zero comments — where do i even start"
+  - query: "this module has a config dict passed into everything, methods that just forward to other methods, and zero comments"
     expect_section: "7.5"
     expect_principle: information-hiding
   # u4 2.1 definition | rough
   - query: "inherited a 3k line file, functions call each other in a web, renaming anything breaks something somewhere"
     expect_principle: complexity
   # u5 2.2 definition | rough | rough-pair of "a small change forces edits in many unrelated places"
-  - query: "small tweak took 3 days because i had to touch 9 files and then 2 broke in prod"
+  - query: "a small change required touching nine files and still broke two things elsewhere"
     expect_section: "2.2"
     expect_principle: complexity
   # u29 5.2 definition | rough
   - query: "new feature means touching the parser the store and the cli, they all know each others formats"
     expect_principle: information-hiding
 
-  # -- typos / informal register --
-  # u67 9 definition | rough | rough-pair of "should I split this big class into several smaller classes"
-  - query: "shoud i split this calss into two"
-    expect_section: "9"
-    expect_principle: deep-modules
-  # u95 12.1 rationale | rough | rough-pair of "if good code explains itself why should I write comments at all"
-  - query: "y comment readable code"
-    expect_principle: comments
-  # u169 18 definition | rough
-  - query: "wat makes code obvius vs not"
-    expect_chapter: "18"
-
-  # -- wrong-altitude: task-level asks, principle-level answers --
+  # -- scope calibration: how far to go, asked constantly mid-task --
   # u156 16.1 definition | rough
-  - query: "cleaning up a 2000 line file where do i start"
+  - query: "how much surrounding cleanup is justified while making a small change"
     expect_principle: strategic-programming
   # u156 16.1 definition | rough
-  - query: "new to this codebase how do i not make it worse"
+  - query: "in a tangled module, repair the structure first or land the change as-is"
     expect_principle: strategic-programming
 
   # ==== audit tranche (2026-07-10): artifact-property sweeps ====

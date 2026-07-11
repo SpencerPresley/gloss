@@ -249,8 +249,11 @@ detection. (spec §13 #10; `plans/2026-06-10-aposd-full-book-build.md` task 1 + 
 
 The query interface is a CLI invoked by shelling out, not an MCP server. A CLI costs zero standing
 context (MCP loads tool schemas into every session and needs a running process), composes with
-skills/subagents, and is portable into any repo (any agent can shell out). The skill is *designed-for*
-but **not edited yet** — wiring it to call `gloss retrieve --json` is a deferred task. (spec §12)
+skills/subagents, and is portable into any repo (any agent can shell out). The skill is wired
+(2026-07-10): its "Consulting the Source" section queries `gloss retrieve --compact` when the corpus
+db exists and expands runner-up previews with `gloss show <id>`, falling back to the bundled
+references when it doesn't. The steering (symptom phrasing, channel-tag trust rules, never answering
+from a preview paraphrase) is encoded once in the skill instead of per-use by the user. (spec §12)
 
 ### 15. The PDF and the built `.db` are not distributed
 

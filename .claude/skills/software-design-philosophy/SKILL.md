@@ -4,7 +4,7 @@ description: 'Manage software complexity through deep modules, information hidin
 license: MIT
 metadata:
   author: wondelai
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # A Philosophy of Software Design Framework
@@ -14,6 +14,50 @@ A practical framework for managing the fundamental challenge of software enginee
 ## Core Principle
 
 **The greatest limitation in writing software is our ability to understand the systems we are creating.** Complexity is the enemy. It makes systems hard to understand, hard to modify, and a source of bugs. Every design decision should be evaluated by asking: "Does this increase or decrease the overall complexity of the system?" The goal is not zero complexity -- that is impossible in useful software -- but to minimize unnecessary complexity and concentrate necessary complexity where it can be managed.
+
+## Consulting the Source (gloss corpus)
+
+This repo may carry a queryable corpus of the book itself: `gloss` returns Ousterhout's
+**actual passages** with citations, not a paraphrase. When the corpus is available,
+ground design answers in it — a verbatim passage with a page number beats this file's
+distillation.
+
+**Availability check:** the corpus db is `build/minimax-v2.db`; if that file is absent,
+use the live db named in `CLAUDE.md`. If no db exists, skip this section and work from
+the bundled [reference files](#reference-files) as usual.
+
+**How to query:**
+
+```bash
+uv run gloss retrieve "<symptom-phrased query>" --db build/minimax-v2.db -k 3 --compact
+```
+
+- Phrase the query as a developer's *symptom* ("callers have to call setup in the right
+  order", "my class just forwards calls and adds nothing"), not book vocabulary
+  ("temporal decomposition").
+- When you already know which principle applies, narrow with `--principle <slug>`. The
+  slugs are the six principles below: `complexity`, `deep-modules`,
+  `information-hiding`, `general-purpose`, `comments`, `strategic-programming`.
+
+**Reading the output:** the top hit prints in full — citation header + verbatim
+passage. Runners-up print as one `more: id=N [citation] (type via tags) — <paraphrase>`
+preview line each.
+
+**Trust rules:**
+
+- Top hit tagged `via lex#N+sem#M` (both channels present) = two independent retrieval
+  signals agree — high confidence; quote it.
+- Channels disagree (one-channel tag like `via sem#4`), or a `more:` preview matches
+  the situation better than the top hit? Expand that unit before answering:
+  `uv run gloss show <id> --db build/minimax-v2.db`.
+- **Never answer from a preview line.** Its text is a generated paraphrase, not the
+  passage — the verbatim promise applies only to passage bodies. Expand with
+  `gloss show` and quote the source's own words.
+- No hits, or nothing fits the situation? Rephrase once with different symptom
+  vocabulary. Still nothing → fall back to the bundled reference files.
+
+**Cite what you quote:** pass the citation through — `[deep-modules §4.6 p.45]` tells
+the reader exactly where in the book the passage lives.
 
 ## Scoring
 

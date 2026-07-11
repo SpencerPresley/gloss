@@ -10,7 +10,10 @@ candidate must be dropped or rewritten.
 
 Two softer checks are reported as warnings:
   - 4-gram overlap with unit ``text`` (the "no quoting the passage" rule);
-  - 4-gram overlap with queries already in ``cases.yaml`` (near-duplicate guard).
+  - 4-gram overlap with queries already in ``cases.yaml`` or with other
+    candidates in the same file (near-duplicate guard).
+
+An exact duplicate query within the candidates file is a hard FAIL.
 
 Also fails on pins that don't resolve against the db (a typo'd
 ``expect_section`` would make a case silently unhittable).
@@ -86,6 +89,21 @@ def main() -> int:
     existing_grams = set().union(*(ngrams(c["query"]) for c in existing)) if existing else set()
 
     fails = warns = 0
+    seen_queries: dict[str, int] = {}
+    seen_grams: dict[tuple[str, ...], int] = {}
+    for case in cases:
+        q, line = case["query"].lower(), case["line"]
+        if q in seen_queries:
+            fails += 1
+            print(f"FAIL {args.candidates.name}:{line}: exact duplicate of "
+                  f"line {seen_queries[q]} :: {case['query']!r}")
+        seen_queries.setdefault(q, line)
+        if dup_lines := {seen_grams[g] for g in ngrams(q) if g in seen_grams}:
+            warns += 1
+            print(f"WARN {args.candidates.name}:{line}: shares a 4-gram with "
+                  f"candidate line(s) {sorted(dup_lines)} :: {case['query']!r}")
+        for g in ngrams(q):
+            seen_grams.setdefault(g, line)
     for case in cases:
         q, where = case["query"], f'{args.candidates.name}:{case["line"]}'
         grams = ngrams(q)

@@ -342,15 +342,29 @@ C-speed; stdlib-only portability is a core invariant).
 
 ### Track D: eval-set expansion — candidates drafted, pending vetting (2026-07-10)
 
-Future-path #1 executed to the candidate stage: **145 synthetic situation-phrased cases**
-in `corpora/aposd/cases-candidates.yaml`, drafted from 82 stratified source units (every
-chapter ≥1 case, chs 1–20 ≥3; all six principles plus the null-principle chapters; all five
-unit types) while reading **only** verbatim `text` + chapter/section — never the stored
-metadata. Leakage-screened by `corpora/aposd/screen_candidates.py` (stdlib): zero word-4-gram
-overlap with `questions`/`key_terms`/`context_line`/`applies_when`, plus warnings for quoting
-source text or echoing an existing case (all cleared). Candidates were **not** filtered by
-what the current system retrieves (anti-Goodhart); admissibility was well-posedness only.
-A simulated merge scores well-formed: 176 cases, 6/6 principles, no duplicate queries.
+Future-path #1 executed to the candidate stage: **187 candidate cases** in
+`corpora/aposd/cases-candidates.yaml`, in two tranches:
+
+- **Dev-voice (145)**: situation-phrased first-person symptom queries, drafted from 82
+  stratified source units (every chapter ≥1 case, chs 1–20 ≥3; all six principles plus the
+  null-principle chapters; all five unit types) while reading **only** verbatim `text` +
+  chapter/section — never the stored metadata.
+- **Agent-voice (42)**: queries phrased the way the consuming agent actually issues them in
+  the two intended workflows — design iron-out with the skill (prescriptive decision
+  questions, alternatives side by side) and refactor review (third-person descriptions of
+  observed code, concrete identifiers, python/asyncio vocabulary). Drafted **forward**
+  (workflow simulation → query → pin located by reading unit text), which is the realistic
+  direction. Includes 8 deliberate voice-pairs of dev-voice cases (marked) to measure voice
+  robustness. Post-skill queries that reuse book vocabulary are deliberately excluded — the
+  leakage firewall can't tell them from index echo; the query-log path (#2) covers those.
+
+Both tranches leakage-screened by `corpora/aposd/screen_candidates.py` (stdlib): zero
+word-4-gram overlap with `questions`/`key_terms`/`context_line`/`applies_when`, plus
+warnings for quoting source text, echoing an existing case, or colliding with another
+candidate (all cleared; exact in-file duplicates are a hard fail). Candidates were **not**
+filtered by what the current system retrieves (anti-Goodhart); admissibility was
+well-posedness only. A simulated merge scores well-formed: 218 cases, 6/6 principles, no
+duplicate queries.
 
 **Not merged into `cases.yaml`** — human vetting first; approved cases land under a
 `# --- synthetic set ... ---` marker so curated-vs-synthetic stays separable. After the

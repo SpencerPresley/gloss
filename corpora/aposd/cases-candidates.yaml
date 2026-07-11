@@ -521,3 +521,167 @@ cases:
   # u197 summary-redflags definition
   - query: "a checklist of design warning signs to scan for in code review"
     expect_section: "summary-redflags"
+
+  # ==== agent-voice tranche (2026-07-10) ====
+  # Queries phrased the way the consuming agent (Claude, mid-workflow) actually
+  # issues them, in the two intended workflows:
+  #   [design]   task arrives -> skill invoked -> gloss consulted per design
+  #              decision while ironing out the approach. Shape: prescriptive
+  #              decision questions, alternatives held side by side, compact.
+  #   [refactor] reviewing existing code for improvement. Shape: third-person
+  #              descriptions of observed code, concrete identifiers/language
+  #              vocabulary (python, asyncio, dict), present tense.
+  # Drafting direction is FORWARD (unlike the tranche above): the query came
+  # from workflow simulation first, then was pinned by locating the answering
+  # passage — reading verbatim text only, same firewall, same 4-gram screen.
+  # A few are deliberate voice-pairs of a dev-voice case above (marked): same
+  # underlying situation, different register — they measure voice robustness.
+  # Post-skill queries that reuse the book's own vocabulary are deliberately
+  # EXCLUDED: the leakage firewall can't distinguish them from index echo, and
+  # they're the easy case anyway. The future query-log path covers those.
+
+  # -- [design] --
+  # u20 4.5 red_flag | design
+  - query: "how many public methods before an interface is too big"
+    expect_principle: deep-modules
+  # u45 6.5 rationale | design
+  - query: "one general method with a mode parameter or several specific methods"
+    expect_principle: general-purpose
+  # u150 15.2 definition | design (interface-first also lives in ch11)
+  - query: "brand-new module: settle the interface first or prototype the implementation"
+    expect_section: "15.2"
+    expect_chapter: "11"
+  # u22 4.7 red_flag | design
+  - query: "the frequent path should need zero setup, with rare options tucked out of sight"
+    expect_section: "4.7"
+    expect_principle: deep-modules
+  # u82 10.2 rationale | design
+  - query: "return null or raise an exception when the key is missing"
+    expect_chapter: "10"
+  # u41 6.1 definition | design
+  - query: "how much future flexibility belongs in a v1 interface"
+    expect_principle: general-purpose
+  # u74 9.8 rationale | design
+  - query: "criteria for splitting a method versus keeping it whole"
+    expect_section: "9.8"
+  # u55 7.1 red_flag | design
+  - query: "wrap the inner class behind a facade or let callers use it directly"
+    expect_section: "7.1"
+    expect_principle: information-hiding
+  # u82 10.2 rationale | design (punting also answered by ch8)
+  - query: "before adding a new exception type: can any caller realistically handle it"
+    expect_section: "10.2"
+    expect_chapter: "8"
+  # u93 11 definition | design
+  - query: "two candidate designs: simpler interface but slower implementation, or the reverse"
+    expect_chapter: "11"
+  # u150 15.2 definition | design
+  - query: "write the class comment before the code to smoke-test the abstraction"
+    expect_section: "15.2"
+    expect_principle: comments
+  # u54 7 definition | design
+  - query: "in a layered design, what should actually change between adjacent layers"
+    expect_section: "7"
+    expect_principle: information-hiding
+  # u80 10 definition | design
+  - query: "error handling strategy for a new public api"
+    expect_chapter: "10"
+  # u67 9 definition | design
+  - query: "parser builds the tree and a separate walker evaluates it — one class or two"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u134 14.1 example | design
+  - query: "how much time is worth spending on names during design"
+    expect_chapter: "14"
+  # u41 6.1 definition | design
+  - query: "premature generalization or premature specialization, which mistake costs more"
+    expect_principle: general-purpose
+  # u57 7.3 red_flag | design
+  - query: "does wrapping the third-party client library buy anything or is it pure indirection"
+    expect_section: "7.3"
+    expect_principle: information-hiding
+  # u71 9.4 definition | design
+  - query: "a helper only one feature uses: keep it near the feature or in the shared library"
+    expect_section: "9.4"
+    expect_principle: general-purpose
+  # u59 7.5 definition | design
+  - query: "one context object passed everywhere or explicit parameters on every call"
+    expect_section: "7.5"
+  # u71 9.4 definition | design
+  - query: "adding a second output format: copy the existing emitter or generalize it"
+    expect_principle: general-purpose
+  # u156 16.1 definition | design
+  - query: "the new feature clashes with the current module boundaries — bend the feature or move the boundaries"
+    expect_principle: strategic-programming
+
+  # -- [refactor] --
+  # u55 7.1 red_flag | refactor | voice-pair of "this small class just forwards calls..."
+  - query: "nearly every method here delegates to a single private helper"
+    expect_section: "7.1"
+    expect_principle: deep-modules
+  # u72 9.5 example | refactor (pin convention follows the existing boolean-flag cases)
+  - query: "function with six boolean parameters that each toggle some behavior"
+    expect_section: "9.5"
+    expect_principle: general-purpose
+  # u71 9.4 definition | refactor | voice-pair of "fifth time I've copy-pasted..."
+  - query: "the same guard clause copy-pasted into every handler"
+    expect_section: "9.4"
+    expect_principle: deep-modules
+  # u6 2.3 definition | refactor
+  - query: "utility module imported by everything so every change ripples across the app"
+    expect_principle: complexity
+  # u70 9.3 rationale | refactor
+  - query: "extract a four-line snippet that touches three locals, or leave it inline"
+    expect_section: "9.3"
+  # u90 10.10 red_flag | refactor | voice-pair of "our network layer swallows every failure..."
+  - query: "exceptions caught, logged, and dropped so callers never learn about failures"
+    expect_section: "10.10"
+  # u82 10.2 rationale | refactor
+  - query: "stack of nested ifs handling rare edge cases before the real work starts"
+    expect_chapter: "10"
+  # u67 9 definition | refactor
+  - query: "UserSession class stores auth tokens and also renders html"
+    expect_section: "9"
+    expect_principle: deep-modules
+  # u28 5.1 definition | refactor
+  - query: "one module reaches into another module's internal dict and mutates it"
+    expect_principle: information-hiding
+  # u29 5.2 definition | refactor | voice-pair of "every time I change the file format code..."
+  - query: "every schema change means editing three classes in lockstep"
+    expect_principle: information-hiding
+  # u182 19.1 definition | refactor
+  - query: "subclassing the built-in list just to add one convenience method"
+    expect_section: "19.1"
+    expect_principle: information-hiding
+  # u74 9.8 rationale | refactor | voice-pair of "is my 300-line function automatically a problem"
+  - query: "an 800-line main function drives the whole tool"
+    expect_section: "9.8"
+  # u71 9.4 definition | refactor (duplicated knowledge also answered by ch5 leakage units)
+  - query: "identical retry logic implemented independently in four services"
+    expect_section: "9.4"
+    expect_principle: information-hiding
+  # u29 5.2 definition | refactor
+  - query: "platform-specific branches scattered through every file instead of isolated in one place"
+    expect_principle: information-hiding
+  # u88 10.8 definition | refactor | voice-pair of "checking the allocator's return value..."
+  - query: "the function returns null on failure and just assumes every caller remembers to check"
+    expect_section: "10.8"
+  # u156 16.1 definition | refactor
+  - query: "while rewriting the internals anyway, should the awkward public api get fixed too"
+    expect_principle: strategic-programming
+  # u179 18.2 red_flag | refactor
+  - query: "function returns a tuple of three unnamed values callers have to unpack by position"
+    expect_section: "18.2"
+  # u177 18.2 definition | refactor | voice-pair of "callbacks fire from somewhere..."
+  - query: "asyncio callbacks and event handlers leave the control flow impossible to trace"
+    expect_section: "18.2"
+  # u184 19.3 rationale | refactor | voice-pair of "nobody dares restructure anything..."
+  - query: "planning a big restructure of a module that has zero test coverage"
+    expect_section: "19.3"
+  # u5 2.2 definition | refactor (pulling the obligation into the module is ch8)
+  - query: "move the cleanup into a context manager so callers can't forget it"
+    expect_section: "2.2"
+    expect_chapter: "8"
+  # u135 14.2 definition | refactor
+  - query: "picking between two candidate names for the method that merges two configs"
+    expect_chapter: "14"

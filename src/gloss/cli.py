@@ -27,7 +27,9 @@ def _format_hit(hit: dict) -> str:
 
 def cmd_retrieve(args) -> None:
     """Print passages matching a design situation (``--json`` for structured output)."""
-    kw = dict(k=args.k, principles=args.principle, types=args.type)
+    # A reranker needs a few candidates to choose among, even at -k 1.
+    kk = max(args.k, 5) if args.rerank else args.k
+    kw = dict(k=kk, principles=args.principle, types=args.type)
     if args.mode == "lexical":
         hits = search(Path(args.db), args.query, **kw)
     else:
@@ -37,6 +39,11 @@ def cmd_retrieve(args) -> None:
             hits = fn(Path(args.db), args.query, base_url=args.ollama_url, **kw)
         except VectorsUnavailable as e:
             raise SystemExit(f"gloss retrieve --mode {args.mode}: {e}")
+    if args.rerank:
+        from .rerank import rerank
+        template = Path(args.rerank_prompt).read_text() if args.rerank_prompt else None
+        hits = rerank(args.query, hits, model=args.rerank_model,
+                      base_url=args.ollama_url, template=template)[:args.k]
     if args.json:
         print(json.dumps(hits, indent=2))
     else:
@@ -59,33 +66,58 @@ def cmd_embed(args) -> None:
           f"(dim={info['dim']}, model={info['model']}) in {args.db}")
 
 
-def _search_fn_for(mode: str, ollama_url: str):
-    """Resolve an eval retrieval mode to a score_cases-compatible search_fn."""
+def _search_fn_for(mode: str, ollama_url: str, rerank_model: str | None = None,
+                   rerank_template: str | None = None):
+    """Resolve an eval retrieval mode to a score_cases-compatible search_fn.
+
+    ``rerank_model`` wraps the mode's results in an LLM rerank (top-5 candidates
+    in, top-k out) — applied to one leg only so a comparison isolates exactly
+    the reranker's contribution.
+    """
     if mode == "lexical":
-        return search
-    from functools import partial
-    from .vectors import search_hybrid, search_semantic
-    return partial(search_hybrid if mode == "hybrid" else search_semantic,
-                   base_url=ollama_url)
+        base = search
+    else:
+        from functools import partial
+        from .vectors import search_hybrid, search_semantic
+        base = partial(search_hybrid if mode == "hybrid" else search_semantic,
+                       base_url=ollama_url)
+    if not rerank_model:
+        return base
+    from .rerank import rerank
+
+    def fn(db, query, k=5):
+        hits = base(db, query, k=max(k, 5))
+        return rerank(query, hits, model=rerank_model, base_url=ollama_url,
+                      template=rerank_template)[:k]
+    return fn
 
 
 def cmd_eval(args) -> None:
     """Score retrieval against eval cases; --vs adds a paired significance test."""
     from .evalrun import paired_sign_flip, run_eval, score_cases
+    primary_rr = args.rerank_model if args.rerank else None
+    template = Path(args.rerank_prompt).read_text() if getattr(args, "rerank_prompt", None) else None
+    if args.vs and (args.mode, primary_rr) == (args.vs, None):
+        raise SystemExit("gloss eval: --vs compares two different configurations "
+                         "(same mode needs --rerank on the primary leg)")
     if not args.vs:
         run_eval(Path(args.db), Path(args.cases), k=args.k, verbose=args.verbose,
-                 search_fn=_search_fn_for(args.mode, args.ollama_url))
+                 search_fn=_search_fn_for(args.mode, args.ollama_url, primary_rr, template))
         return
     import yaml
     cases = yaml.safe_load(Path(args.cases).read_text())["cases"]
     results = {}
-    for mode in (args.mode, args.vs):
-        results[mode] = score_cases(Path(args.db), cases, k=args.k,
-                                    search_fn=_search_fn_for(mode, args.ollama_url))
-        r = results[mode]
-        print(f"{mode:8}: hit@{args.k}={r['hit_rate']:.2f} hit@1={r['hit1']:.2f} "
+    # --rerank applies to the primary --mode leg only, so `--mode hybrid --rerank
+    # --vs hybrid` isolates exactly the reranker's contribution.
+    for mode, rr in ((args.mode, primary_rr), (args.vs, None)):
+        label = f"{mode}+rr" if rr else mode
+        results[label] = score_cases(Path(args.db), cases, k=args.k,
+                                     search_fn=_search_fn_for(mode, args.ollama_url, rr, template))
+        r = results[label]
+        print(f"{label:10}: hit@{args.k}={r['hit_rate']:.2f} hit@1={r['hit1']:.2f} "
               f"mrr={r['mrr']:.2f} n={r['n']}")
-    delta, p = paired_sign_flip(results[args.mode]["ranks"], results[args.vs]["ranks"])
+    a, b = list(results)
+    delta, p = paired_sign_flip(results[a]["ranks"], results[b]["ranks"])
     print(f"Δmrr={delta:+.3f} p={p:.4f} "
           f"(paired sign-flip on per-case reciprocal rank, 10000 resamples)")
 
@@ -107,6 +139,13 @@ def main(argv: list[str] | None = None) -> None:
                         "else lexical (default); hybrid/semantic fail loudly instead of degrading")
     r.add_argument("--ollama-url", default="http://localhost:11434",
                    help="Ollama base URL for query embedding (hybrid/semantic/auto modes)")
+    r.add_argument("--rerank", action="store_true",
+                   help="LLM-rerank the top candidates when fusion's #1 isn't dual-backed "
+                        "(one Ollama chat call); falls back to the original order on any failure")
+    r.add_argument("--rerank-model", default="gemma4:e2b")
+    r.add_argument("--rerank-prompt", metavar="FILE",
+                   help="corpus-specific rerank prompt template file with {query}, "
+                        "{candidates}, {n} placeholders (default: built-in generic)")
     r.set_defaults(func=cmd_retrieve)
 
     m = sub.add_parser("embed", help="precompute unit vectors into the db (semantic channel)")
@@ -139,6 +178,12 @@ def main(argv: list[str] | None = None) -> None:
                    help="second mode to compare against: prints both scores plus a paired "
                         "sign-flip p-value on per-case reciprocal rank")
     e.add_argument("--ollama-url", default="http://localhost:11434")
+    e.add_argument("--rerank", action="store_true",
+                   help="LLM-rerank the PRIMARY --mode leg only, so `--mode hybrid --rerank "
+                        "--vs hybrid` isolates the reranker's contribution")
+    e.add_argument("--rerank-model", default="gemma4:e2b")
+    e.add_argument("--rerank-prompt", metavar="FILE",
+                   help="corpus-specific rerank prompt template file (see retrieve --rerank-prompt)")
     e.set_defaults(func=cmd_eval)
 
     args = parser.parse_args(argv)

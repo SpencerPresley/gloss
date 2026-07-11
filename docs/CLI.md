@@ -31,6 +31,9 @@ gloss retrieve [-h] --db DB [-k K] [--principle PRINCIPLE] [--type TYPE] [--json
 | `--json` | flag | off | Emit the raw list of row dicts as indented JSON instead of formatted text. |
 | `--mode` | choice | `auto` | `auto` = hybrid when the db has vectors and Ollama answers, else lexical (silently for a vector-less db, with a stderr note when vectors exist but the embedder is down). `lexical` = BM25 only, never touches vectors. `hybrid` = BM25 + vectors via RRF, **fails loudly** (`SystemExit`) if the channel can't run. `semantic` = vectors only (ablation/debugging). |
 | `--ollama-url` | str | `http://localhost:11434` | Ollama base URL for query embedding (all modes except `lexical`). |
+| `--rerank` | flag | off | LLM-rerank the top candidates (fetches ≥5 even at `-k 1`, returns top-k). **Gated**: when fusion's #1 is dual-backed (lexical #1 + semantic top-5) it is trusted and no model call happens — measured, every reranker's mistakes cluster on exactly those (`rerank.py:fusion_trusts_top1`). On any failure (model missing, bad reply) the original order is kept with a stderr note; reordered hits carry `reranked: true`. |
+| `--rerank-model` | str | `gemma4:e2b` | Rerank model (safe local default). Measured best: `gemma4:31b-cloud` — hit@1 0.71→0.84 at ~0.9s/call; `minimax-m3:cloud` ties on quality. |
+| `--rerank-prompt` | file | built-in | Corpus-specific rerank prompt template (`{query}`, `{candidates}`, `{n}` placeholders). The built-in is corpus-agnostic; a corpus-tuned instruction can do better. |
 
 Filters are AND-combined across facets, OR-combined within a facet (`u.principle IN (...) AND u.type IN (...)`, [store.py:79-89](../src/gloss/store.py#L79)). Filters apply to both channels.
 
@@ -216,6 +219,7 @@ gloss eval [-h] --db DB [--cases CASES] [-k K] [-v]
 | `-v` / `--verbose` | flag | off | Also print every case whose expected unit is **not** ranked #1 (its rank or `miss`). |
 | `--mode` | choice | `lexical` | Retrieval mode to score. Deliberately no `auto`: an eval must not silently degrade. `hybrid`/`semantic` need an embedded db + running Ollama. |
 | `--vs` | choice | — | Second mode to compare against: prints both score lines plus `Δmrr` and a p-value from a paired sign-flip randomization test on per-case reciprocal rank ([evalrun.py:paired_sign_flip](../src/gloss/evalrun.py)) — use it before adopting any knob change. |
+| `--rerank` / `--rerank-model` / `--rerank-prompt` | | | As in `retrieve`, applied to the **primary `--mode` leg only** — so `--mode hybrid --rerank --vs hybrid` isolates exactly the reranker's contribution. |
 | `--ollama-url` | str | `http://localhost:11434` | Ollama base URL for the non-lexical modes. |
 
 ### Output

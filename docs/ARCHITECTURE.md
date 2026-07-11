@@ -162,6 +162,7 @@ statement (`src/gloss/store.py:68`).
 | `taxonomy.py` | load taxonomy.yaml; map chapter -> principle; render a per-principle card. |
 | `store.py` | SQLite/FTS5 store: DDL, `build_db`, `to_match_query`, `search`. **Stdlib only.** |
 | `vectors.py` | optional semantic channel: `embed_corpus` (vectors into the same db via Ollama `/api/embed`), `search_semantic`, `search_hybrid` (RRF fusion + per-channel rank tags), `search_auto` (graceful degrade). **Stdlib only**; Ollama is a service dependency. |
+| `rerank.py` | opt-in LLM rerank of the top candidates via Ollama `/api/chat`, gated by `fusion_trusts_top1` (dual-backed #1s are never overridden); reorder-only contract with fallback-to-unchanged on any failure; injectable `chat_fn`. **Stdlib only.** |
 | `build.py` | orchestrate parse->segment->enrich->store for one chapter or the whole book; size `num_ctx`. |
 | `evalrun.py` | score retrieval against cases.yaml: hit@k, hit@1, MRR; injectable `search_fn` for scoring any mode; `paired_sign_flip` significance test for A/B-ing modes or knobs. |
 | `cli.py` | argparse CLI: `retrieve`/`embed` (stdlib) / `build` / `eval` (lazy-imported). |

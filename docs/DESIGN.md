@@ -340,6 +340,23 @@ C-speed; stdlib-only portability is a core invariant).
    pressure is still there. If it regresses, the legitimate fix is broader enrichment coverage,
    **not** hand-editing §9.5's metadata to beat the eval case (Goodhart).
 
+### Track D: eval-set expansion — candidates drafted, pending vetting (2026-07-10)
+
+Future-path #1 executed to the candidate stage: **145 synthetic situation-phrased cases**
+in `corpora/aposd/cases-candidates.yaml`, drafted from 82 stratified source units (every
+chapter ≥1 case, chs 1–20 ≥3; all six principles plus the null-principle chapters; all five
+unit types) while reading **only** verbatim `text` + chapter/section — never the stored
+metadata. Leakage-screened by `corpora/aposd/screen_candidates.py` (stdlib): zero word-4-gram
+overlap with `questions`/`key_terms`/`context_line`/`applies_when`, plus warnings for quoting
+source text or echoing an existing case (all cleared). Candidates were **not** filtered by
+what the current system retrieves (anti-Goodhart); admissibility was well-posedness only.
+A simulated merge scores well-formed: 176 cases, 6/6 principles, no duplicate queries.
+
+**Not merged into `cases.yaml`** — human vetting first; approved cases land under a
+`# --- synthetic set ... ---` marker so curated-vs-synthetic stays separable. After the
+merge: re-baseline all three modes here (keep the n=31 history above, labeled) and re-run
+every per-track `--vs` comparison — n=31 numbers do not transfer.
+
 ---
 
 ## Status & known limitations (from README + handoffs)

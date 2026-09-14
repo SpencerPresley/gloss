@@ -8,4 +8,4 @@ an *instance* configured under ``corpora/<name>/`` (parse profile, taxonomy,
 enrichment prompt, eval cases). See ``docs/superpowers/specs/`` for the design.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

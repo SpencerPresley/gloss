@@ -1,6 +1,6 @@
 [project]
 name = "docq"
-version = "0.1.0"
+version = "0.1.1"
 description = "Structured lexical retrieval from documents — turn a source text into a portable, cited, principle-anchored corpus."
 readme = "README.md"
 license = "MIT"

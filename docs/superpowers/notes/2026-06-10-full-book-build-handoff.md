@@ -2,7 +2,7 @@
 
 ## Status: Whole book built, reviewed, merged to `main` ✅
 
-Continues the Ch.6 slice (`2026-06-10-session-handoff.md`). This session turned `gloss` into a
+Continues the Ch.6 slice (`2026-06-10-session-handoff.md`). This session turned `docq` into a
 **whole-book builder** and produced the full *A Philosophy of Software Design* corpus. Plan:
 `docs/superpowers/plans/2026-06-10-aposd-full-book-build.md`. **43 tests pass**
 (`uv run --extra build pytest -q`). All work merged to `main` (branch `impl/full-book-build` deleted).
@@ -33,12 +33,12 @@ Continues the Ch.6 slice (`2026-06-10-session-handoff.md`). This session turned 
 - `build/aposd-minimax.db` — **minimax-m3:cloud**, 257 units, 0 failures, clean facet
   (built with `--build-dir build/minimax --db build/aposd-minimax.db`, devstral untouched).
 - Per-chapter checkpoints: devstral at `build/ch*/units.jsonl`, minimax at `build/minimax/ch*/units.jsonl`.
-- Regenerate a db from checkpoints with **zero quota**: `gloss build --resume --db <path> [--build-dir <dir>]`
+- Regenerate a db from checkpoints with **zero quota**: `docq build --resume --db <path> [--build-dir <dir>]`
   (all units already enriched → no LLM calls; only re-applies the principle override + rebuilds the db).
 
 ## Model A/B result (Task 7) — minimax marginally ahead, not decisive
 
-`gloss eval`: **devstral 0.75 (12/16), minimax 0.81 (13/16).** Per-case: minimax **fixed both complexity
+`docq eval`: **devstral 0.75 (12/16), minimax 0.81 (13/16).** Per-case: minimax **fixed both complexity
 cases** (the systematic abstract-principle recall gap) + 1 ambiguous general-purpose case, but **regressed
 2 concrete cases** devstral got (classitis method-count → deep-modules; temporal setup-order → info-hiding).
 The category-level complexity improvement looks real; the 2 regressions look like ranking jitter. **+1 net
@@ -62,21 +62,21 @@ strengthening the eval.**
    Text is all searchable; sub-splitting long prose runs is a possible future refinement (spec chose
    deterministic prose-run units deliberately).
 6. **Distribution** (prior plan Task 13, Spencer leads) — bundle a db as package data (`importlib.resources`),
-   `uvx gloss retrieve`. Decide which model's db ships (see A/B above). No `*.db` gitignore rule — keep dbs
+   `uvx docq retrieve`. Decide which model's db ships (see A/B above). No `*.db` gitignore rule — keep dbs
    under `build/`.
 7. **Skill integration (deferred, do NOT edit the skill yet)** — wire `software-design-philosophy` to call
-   `gloss retrieve --json` for primary-source passages.
+   `docq retrieve --json` for primary-source passages.
 
 ## How to run
 
 ```bash
 # Whole-book build (per-model dirs so artifacts coexist):
-uv run --extra build gloss build --model minimax-m3:cloud --workers 8 \
+uv run --extra build docq build --model minimax-m3:cloud --workers 8 \
     --db build/aposd-minimax.db --build-dir build/minimax
 # Regenerate a db from checkpoints (no quota):
-uv run --extra build gloss build --resume --db build/aposd-minimax.db --build-dir build/minimax
+uv run --extra build docq build --resume --db build/aposd-minimax.db --build-dir build/minimax
 # Eval / retrieve (retrieve is STDLIB-ONLY):
-uv run --extra build gloss eval --db build/aposd-minimax.db
-uv run gloss retrieve "should I make this API general purpose" --db build/aposd-minimax.db -k 3 [--principle general-purpose]
+uv run --extra build docq eval --db build/aposd-minimax.db
+uv run docq retrieve "should I make this API general purpose" --db build/aposd-minimax.db -k 3 [--principle general-purpose]
 uv run --extra build pytest -q
 ```

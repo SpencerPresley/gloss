@@ -46,7 +46,7 @@ tracks re-measure against the expanded set after it merges.
    `# --- synthetic set (generated from verbatim text, vetted 2026-07-10) ---` so
    curated-vs-synthetic can always be scored separately.
 7. After merge into cases.yaml: re-baseline all three modes
-   (`gloss eval --db build/minimax-v2.db --mode lexical|semantic|hybrid`), record
+   (`docq eval --db build/minimax-v2.db --mode lexical|semantic|hybrid`), record
    the new baseline in DESIGN.md's experiment log (keep the n=31 history intact,
    labeled), and note that per-track numbers must be re-measured.
 
@@ -65,4 +65,4 @@ tracks re-measure against the expanded set after it merges.
 still green after the eventual merge, `docs/DESIGN.md` experiment-log note.
 
 Do not touch: `cases.yaml` directly (candidates file only — the merge happens after
-human vetting), any `src/gloss/` code.
+human vetting), any `src/docq/` code.

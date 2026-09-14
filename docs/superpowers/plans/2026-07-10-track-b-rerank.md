@@ -17,7 +17,7 @@ model is unavailable (same philosophy as `--mode hybrid`).
 
 ## Design
 
-New `src/gloss/rerank.py`, stdlib-only (urllib against Ollama `/api/chat`,
+New `src/docq/rerank.py`, stdlib-only (urllib against Ollama `/api/chat`,
 `stream:false`, temperature 0):
 
 - `rerank(db_path, query, hits, *, model, base_url, keep_text=600) -> list[dict]`
@@ -35,13 +35,13 @@ New `src/gloss/rerank.py`, stdlib-only (urllib against Ollama `/api/chat`,
 
 CLI: `retrieve --rerank [--rerank-model M]` composing with `--mode auto|hybrid|semantic`
 (reranks whatever the mode returned, pool = the k requested… **use k=max(k,5)
-candidates into the reranker, return top-k**). Eval: `--rerank` flag on `gloss eval`
+candidates into the reranker, return top-k**). Eval: `--rerank` flag on `docq eval`
 composing with `--mode`, so `--mode hybrid --rerank --vs hybrid` measures exactly the
 reranker's contribution.
 
 ## Experiment protocol (gate before shipping as recommended usage)
 
-1. `gloss eval --db build/minimax-v2.db --mode hybrid --rerank --vs hybrid` (the
+1. `docq eval --db build/minimax-v2.db --mode hybrid --rerank --vs hybrid` (the
    `--vs` leg unreranked). Record hit@1/mrr deltas + p.
 2. Count **demotions**: cases where unreranked rank was 1 and reranked is worse.
    Ship-gate: net hit@1 positive AND demotions ≤1. The 22 correct #1s are the
@@ -54,9 +54,9 @@ reranker's contribution.
 
 ## Files
 
-`src/gloss/rerank.py` (new), `src/gloss/cli.py` (flags), `tests/test_rerank.py`
+`src/docq/rerank.py` (new), `src/docq/cli.py` (flags), `tests/test_rerank.py`
 (fake chat_fn: reorder happy path; malformed-JSON fallback; missing-id fallback;
 HTTP-error fallback; candidates never dropped/invented), `tests/test_stdlib_contract.py`
-(add `gloss.rerank` to the import set), `docs/CLI.md`, `docs/DESIGN.md`.
+(add `docq.rerank` to the import set), `docs/CLI.md`, `docs/DESIGN.md`.
 
 Do not touch: `cases.yaml`, segmentation/enrichment, `vectors.py` internals.

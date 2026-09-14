@@ -6,7 +6,7 @@ briefing. **Read this file first, then your track's brief. Do only your track.**
 
 | Track | Brief | Where to run |
 | --- | --- | --- |
-| A — compact output + `gloss show` + skill wiring | `2026-07-10-track-a-compact-skill.md` | worktree (no corpus needed) |
+| A — compact output + `docq show` + skill wiring | `2026-07-10-track-a-compact-skill.md` | worktree (no corpus needed) |
 | B — LLM rerank of top-k | `2026-07-10-track-b-rerank.md` | **claimed by the main session 2026-07-10** — brief kept for handoff |
 | C — question top-up enrichment | `2026-07-10-track-c-question-topup.md` | **main checkout** (needs PDF + checkpoints + minimax quota) |
 | D — eval-set expansion | `2026-07-10-track-d-eval-expansion.md` | worktree (db copy, read-only) |
@@ -27,7 +27,7 @@ per-channel rank tags on every hit. Verify:
 ```bash
 sqlite3 build/minimax-v2.db "SELECT COUNT(*) FROM units;"      # 197
 sqlite3 build/minimax-v2.db "SELECT COUNT(*) FROM vectors;"    # 1493
-uv run --extra build gloss eval --db build/minimax-v2.db --mode hybrid
+uv run --extra build docq eval --db build/minimax-v2.db --mode hybrid
 # hit@5=0.94 hit@1=0.71 mrr=0.80 n=31
 ```
 
@@ -45,7 +45,7 @@ Read before coding: `CLAUDE.md` (three facts), `docs/ARCHITECTURE.md`,
 2. **Verbatim invariant** — returned text is the source's own words, fixed at
    segmentation. Nothing may rewrite it.
 3. **Every ranking-behavior change is eval-gated**:
-   `uv run --extra build gloss eval --db build/minimax-v2.db --mode <A> --vs <B>`
+   `uv run --extra build docq eval --db build/minimax-v2.db --mode <A> --vs <B>`
    (paired sign-flip p-value). House rule: n=31 ⇒ one case ≈ 3.2 points; adopt on
    p-value, or on measured mechanism + zero regressions, and record which in
    DESIGN.md's experiment log.
@@ -59,12 +59,12 @@ Read before coding: `CLAUDE.md` (three facts), `docs/ARCHITECTURE.md`,
 ## Worktree setup
 
 `build/` and `resources/` are gitignored — a fresh worktree has neither. From the
-main checkout (`/Users/spencer/code/gloss`):
+main checkout (`/Users/spencer/code/docq`):
 
 ```bash
-mkdir -p build && cp /Users/spencer/code/gloss/build/minimax-v2.db build/   # tracks B, D
+mkdir -p build && cp /Users/spencer/code/docq/build/minimax-v2.db build/   # tracks B, D
 # PDF only for track C / the 9 corpus-gated tests:
-mkdir -p resources && cp "/Users/spencer/code/gloss/resources/2018-john-ousterhout-a-philosophy-of-software-design_compress.pdf" resources/
+mkdir -p resources && cp "/Users/spencer/code/docq/resources/2018-john-ousterhout-a-philosophy-of-software-design_compress.pdf" resources/
 ```
 
 Ollama is a shared local service (`http://localhost:11434`); concurrent use across
@@ -74,10 +74,10 @@ sessions is fine. `embeddinggemma:latest` is pulled.
 
 | file | A | B | C | D |
 | --- | --- | --- | --- | --- |
-| `src/gloss/cli.py` | ✓ (format + `show`) | ✓ (`--rerank` flags) | ✓ (new subcommand) | — |
-| `src/gloss/store.py` | ✓ (`get_unit`) | — | — | — |
-| `src/gloss/rerank.py` (new) | — | ✓ | — | — |
-| `src/gloss/enrich.py` / `corpora/aposd/prompt.md` | — | — | ✓ | — |
+| `src/docq/cli.py` | ✓ (format + `show`) | ✓ (`--rerank` flags) | ✓ (new subcommand) | — |
+| `src/docq/store.py` | ✓ (`get_unit`) | — | — | — |
+| `src/docq/rerank.py` (new) | — | ✓ | — | — |
+| `src/docq/enrich.py` / `corpora/aposd/prompt.md` | — | — | ✓ | — |
 | `corpora/aposd/cases.yaml` | — | — | — | ✓ (owner) |
 | `.claude/skills/software-design-philosophy/` | ✓ | — | — | — |
 | docs | CLI.md, skill | CLI.md, DESIGN.md | BUILDS.md, DESIGN.md | DESIGN.md |
@@ -92,7 +92,7 @@ conflicts, nothing structural.
   updates its recorded numbers.
 - **C changes the corpus** (new questions → rebuild → re-embed → different vectors).
   After C merges, re-run the eval comparisons. C must end with
-  `gloss embed --db build/minimax-v2.db` — a rebuild wipes the vectors table
+  `docq embed --db build/minimax-v2.db` — a rebuild wipes the vectors table
   (CLAUDE.md fact #3).
 - After all tracks land: refresh the numbers in BUILDS.md / STARTUP_GUIDE.md /
   README.md / DESIGN.md once, in a single docs commit.

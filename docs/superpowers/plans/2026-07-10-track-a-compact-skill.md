@@ -1,4 +1,4 @@
-# Track A — compact output, `gloss show`, skill wiring
+# Track A — compact output, `docq show`, skill wiring
 
 Read `2026-07-10-retrieval-tracks-overview.md` first. Do only this track.
 Runs fine in a worktree with no corpus (tests need neither PDF nor db; for manual
@@ -33,7 +33,7 @@ The preview uses the generated `context_line` (a paraphrase) — acceptable beca
 is labeled as a pointer, never presented as the passage; the verbatim promise applies
 to passage bodies. Truncate context_line at ~140 chars if needed.
 
-### 2. `gloss show <id> --db DB`
+### 2. `docq show <id> --db DB`
 
 Print one unit in full by id (same rendering as a retrieve hit: citation header +
 verbatim text; include `applies_when` as a trailing line — it helps an agent confirm
@@ -43,18 +43,18 @@ fit). Errors cleanly on unknown id (non-zero exit, message). Implement the looku
 ### 3. Skill wiring
 
 Update `.claude/skills/software-design-philosophy/SKILL.md` so the skill actually
-uses gloss (DESIGN.md §14 marks this deferred — this closes it). Instructions to
+uses docq (DESIGN.md §14 marks this deferred — this closes it). Instructions to
 encode, in the skill's own voice/format:
 
 - When the corpus db exists (check `build/minimax-v2.db`, else the CLAUDE.md-named
   live db), answer design questions by querying it:
-  `uv run gloss retrieve "<symptom-phrased query>" --db build/minimax-v2.db -k 3 --compact`
+  `uv run docq retrieve "<symptom-phrased query>" --db build/minimax-v2.db -k 3 --compact`
 - Phrase queries as a developer's symptom ("callers have to call setup in the right
   order"), not book vocabulary; pass `--principle <slug>` when the principle is
   known.
 - Trust rules: `via lex#N+sem#M` on #1 with both channels present = high confidence.
   Channels disagree, or a `more:` preview matches the situation better → run
-  `gloss show <id>` for that preview before answering. Never answer from a preview
+  `docq show <id>` for that preview before answering. Never answer from a preview
   line's paraphrase — expand it first (verbatim only).
 - No hits / weak fit → rephrase once with different symptom vocabulary; else fall
   back to the skill's bundled references.
@@ -62,8 +62,8 @@ encode, in the skill's own voice/format:
 
 ## Files
 
-`src/gloss/cli.py` (flag + `show` subcommand + `_format_hit`/`_format_preview`),
-`src/gloss/store.py` (`get_unit`), `tests/test_cli.py` + `tests/test_store.py`
+`src/docq/cli.py` (flag + `show` subcommand + `_format_hit`/`_format_preview`),
+`src/docq/store.py` (`get_unit`), `tests/test_cli.py` + `tests/test_store.py`
 (subprocess test for `--compact` and `show`, incl. unknown-id exit), `docs/CLI.md`
 (both commands, preview-line format), skill file.
 
@@ -75,4 +75,4 @@ Do not touch: `vectors.py`, `evalrun.py`, `cases.yaml`, segmentation/enrichment.
 - `retrieve --compact --json` behaves identically to `--json` today (compact is a
   text-mode concern) — documented.
 - CLI.md documents both; skill file references only commands/flags that exist.
-- No ranking change: `gloss eval` numbers identical before/after (spot-check).
+- No ranking change: `docq eval` numbers identical before/after (spot-check).

@@ -1,6 +1,6 @@
 # Corpus-generation prompts (reusable)
 
-`gloss` is corpus-agnostic; onboarding a new corpus reuses the same LLM steps. This file
+`docq` is corpus-agnostic; onboarding a new corpus reuses the same LLM steps. This file
 records the prompts so they're a reference, not reinvented each time. Swap the **[bracketed]**
 parts for the new corpus.
 
@@ -18,7 +18,7 @@ the human reviews before it's built on.
 > [framework/skill] against the [source text] it distills. This is analysis + two config
 > artifacts — NOT code, and do NOT commit (a human reviews your output first).
 >
-> Background: we're building `gloss`, a corpus-agnostic engine that turns a source text into a
+> Background: we're building `docq`, a corpus-agnostic engine that turns a source text into a
 > structured, lexically-retrievable corpus of cited passages. Each unit carries two metadata
 > facets: **`principle`** — COARSE, a closed set = the [framework]'s [N] principles (what
 > callers filter on, the vocabulary the index aligns to); **`topic`** — FINE = the text's

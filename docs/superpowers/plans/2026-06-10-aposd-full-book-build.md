@@ -23,9 +23,9 @@
 
 ## Conventions
 
-- Run everything through uv: `uv run --extra build pytest …`, `uv run --extra build gloss build …`. The `retrieve` path stays stdlib-only: `uv run gloss retrieve …`.
+- Run everything through uv: `uv run --extra build pytest …`, `uv run --extra build docq build …`. The `retrieve` path stays stdlib-only: `uv run docq retrieve …`.
 - Google-style docstrings on every public module/class/function.
-- Engine (`src/gloss/`) stays corpus-agnostic; corpus specifics live in `corpora/aposd/`.
+- Engine (`src/docq/`) stays corpus-agnostic; corpus specifics live in `corpora/aposd/`.
 - Commit after every task with the message in its final step.
 - The full test suite must stay green: `uv run --extra build pytest -q` (currently 28 passing).
 
@@ -36,15 +36,15 @@
 Add the chapter-marker regex to `Profile` and an engine function that slices parsed Elements into per-chapter spans. Pure functions — no model, no network.
 
 **Files:**
-- Modify: `src/gloss/profile.py` (add `chapter_re`, `appendices` fields)
-- Modify: `src/gloss/segment.py` (add `split_chapters`)
+- Modify: `src/docq/profile.py` (add `chapter_re`, `appendices` fields)
+- Modify: `src/docq/segment.py` (add `split_chapters`)
 - Modify: `corpora/aposd/profile.py` (set `chapter_re`; drop `chapter_pages`)
 - Modify: `tests/test_segment.py` (add `chapter_re` to the test profile fixture; new tests)
 - Modify: `tests/test_build.py` (`test_load_profile_has_aposd_values` no longer asserts `chapter_pages`)
 
 - [ ] **Step 1: Add the `chapter_re` and `appendices` fields to `Profile`**
 
-In `src/gloss/profile.py`, add two fields after `section_re` (both have defaults, so existing keyword constructions stay valid). Replace the dataclass body:
+In `src/docq/profile.py`, add two fields after `section_re` (both have defaults, so existing keyword constructions stay valid). Replace the dataclass body:
 
 ```python
     corpus_path: Path
@@ -77,8 +77,8 @@ Add to `tests/test_segment.py`. First, extend the existing `_profile()` helper t
 
 ```python
 def test_split_chapters_groups_by_marker():
-    from gloss.parse import Element
-    from gloss.segment import split_chapters
+    from docq.parse import Element
+    from docq.segment import split_chapters
     els = [
         Element("heading", "Preface", 9, 1),            # front matter -> dropped
         Element("para", "preface body", 9),
@@ -102,9 +102,9 @@ def test_split_chapters_groups_by_marker():
 
 
 def test_split_chapters_empty_without_marker():
-    from gloss.parse import Element
-    from gloss.profile import Profile
-    from gloss.segment import split_chapters
+    from docq.parse import Element
+    from docq.profile import Profile
+    from docq.segment import split_chapters
     no_re = Profile(corpus_path=Path("x"), code_font="Typewriter", head_font="NimbusSanL-Bol",
                     chapter_size=20.0, section_size=16.0, figure_min_area=5000,
                     section_re=r"^(\d+\.\d+)")  # chapter_re defaults to ""
@@ -119,7 +119,7 @@ Expected: FAIL (`ImportError: cannot import name 'split_chapters'`).
 
 - [ ] **Step 4: Implement `split_chapters`**
 
-Add to `src/gloss/segment.py` (after the imports; it uses `re`, `Element`, `Profile`, all already imported):
+Add to `src/docq/segment.py` (after the imports; it uses `re`, `Element`, `Profile`, all already imported):
 
 ```python
 def split_chapters(elements: list[Element], profile: Profile) -> list[tuple[str, list[Element]]]:
@@ -190,9 +190,9 @@ Add to `tests/test_segment.py`:
 
 ```python
 def test_split_chapters_real_pdf_finds_all_21(corpus_path):
-    from gloss.build import load_profile
-    from gloss.parse import parse_pdf
-    from gloss.segment import split_chapters
+    from docq.build import load_profile
+    from docq.parse import parse_pdf
+    from docq.segment import split_chapters
     profile = load_profile(Path("corpora/aposd"))
     els = parse_pdf(corpus_path, None, None, profile)
     chapters = split_chapters(els, profile)
@@ -219,7 +219,7 @@ git add -A && git commit -m "feat(segment): detect chapters via chapter_re; demo
 Refactor `run_build` so a build with no `--chapter` loops every detected chapter, enriches each with its own principle card, and accumulates into one db. Add `extractor` and `build_dir` injection points so the loop is testable without a model. Single-chapter builds keep working (filtered from the same path).
 
 **Files:**
-- Modify: `src/gloss/build.py` (`run_build`)
+- Modify: `src/docq/build.py` (`run_build`)
 - Test: `tests/test_build.py`
 
 - [ ] **Step 1: Write the failing test (StubExtractor over the real PDF — no model)**
@@ -229,8 +229,8 @@ Add to `tests/test_build.py`:
 ```python
 def test_run_build_whole_book_accumulates_all_chapters(tmp_path, corpus_path):
     import sqlite3
-    from gloss.build import run_build
-    from gloss.extract import StubExtractor
+    from docq.build import run_build
+    from docq.extract import StubExtractor
     stub = StubExtractor({"principle": "general-purpose", "type": "rationale",
                           "context_line": "c", "applies_when": "a",
                           "key_terms": ["k"], "questions": ["q?"]})
@@ -247,8 +247,8 @@ def test_run_build_whole_book_accumulates_all_chapters(tmp_path, corpus_path):
 
 def test_run_build_single_chapter_still_works(tmp_path, corpus_path):
     import sqlite3
-    from gloss.build import run_build
-    from gloss.extract import StubExtractor
+    from docq.build import run_build
+    from docq.extract import StubExtractor
     stub = StubExtractor({"principle": "general-purpose", "type": "rationale",
                           "context_line": "c", "applies_when": "a",
                           "key_terms": ["k"], "questions": ["q?"]})
@@ -270,7 +270,7 @@ Expected: FAIL (`run_build()` got an unexpected keyword argument `extractor`).
 
 - [ ] **Step 3: Rewrite `run_build`**
 
-Replace the `run_build` function in `src/gloss/build.py` with this version. Add `from .segment import segment, split_chapters` (currently only `segment` is imported) and keep the other imports.
+Replace the `run_build` function in `src/docq/build.py` with this version. Add `from .segment import segment, split_chapters` (currently only `segment` is imported) and keep the other imports.
 
 ```python
 def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE,
@@ -385,8 +385,8 @@ Add to `tests/test_build.py`:
 ```python
 def test_run_build_indexes_summary_appendices(tmp_path, corpus_path):
     import sqlite3
-    from gloss.build import run_build
-    from gloss.extract import StubExtractor
+    from docq.build import run_build
+    from docq.extract import StubExtractor
     stub = StubExtractor({"principle": "general-purpose", "type": "red_flag",
                           "context_line": "c", "applies_when": "a",
                           "key_terms": ["k"], "questions": ["q?"]})
@@ -540,7 +540,7 @@ Expected: present. (Cloud auth via `ollama signin` if needed.)
 
 - [ ] **Step 2: Run the full-book build**
 
-Run: `uv run --extra build gloss build --model devstral-small-2:24b-cloud --db build/aposd.db`
+Run: `uv run --extra build docq build --model devstral-small-2:24b-cloud --db build/aposd.db`
 Expected: per-chapter progress lines (ch1…ch21 + summary-principles/summary-redflags), a final `built N units (0 enrichment failures) -> build/aposd.db` with N in the low hundreds. If interrupted by a quota cap, rerun with `--resume` appended.
 
 - [ ] **Step 3: Sanity-check the db**
@@ -562,10 +562,10 @@ Expected: units across all 21 chapters + the two appendices; `needs_enrich` 0 (o
 
 Run:
 ```bash
-uv run --extra build gloss eval --db build/aposd.db
-uv run gloss retrieve "this small class just forwards calls and adds nothing" --db build/aposd.db -k 3
-uv run gloss retrieve "the comment just restates what the code says" --db build/aposd.db -k 3 --principle comments
-uv run gloss retrieve "define errors out of existence" --db build/aposd.db -k 3
+uv run --extra build docq eval --db build/aposd.db
+uv run docq retrieve "this small class just forwards calls and adds nothing" --db build/aposd.db -k 3
+uv run docq retrieve "the comment just restates what the code says" --db build/aposd.db -k 3 --principle comments
+uv run docq retrieve "define errors out of existence" --db build/aposd.db -k 3
 ```
 Expected: a hit-rate printed (record it); retrieve returns on-topic passages with citations from the right chapters. Note any principle that retrieves poorly — that informs BM25 weight tuning (handoff gap #3) and is a follow-up, not a blocker here.
 
@@ -584,9 +584,9 @@ git add -A && git commit -m "build: first full-book aposd corpus (devstral) + ev
 Speed up rebuilds (the minimax pass + future corpora) by issuing independent unit extractions concurrently. Checkpoint-safe (lock-guarded writes), method pinned by a serial warmup before the pool, transient errors retried with backoff. `max_workers=1` keeps the exact serial behavior (backward compatible).
 
 **Files:**
-- Modify: `src/gloss/enrich.py` (refactor to `_enrich_one`; add `max_workers`)
-- Modify: `src/gloss/build.py` (`run_build` gains `workers`, threads it to `enrich_units`)
-- Modify: `src/gloss/cli.py` (`build` gains `--workers`)
+- Modify: `src/docq/enrich.py` (refactor to `_enrich_one`; add `max_workers`)
+- Modify: `src/docq/build.py` (`run_build` gains `workers`, threads it to `enrich_units`)
+- Modify: `src/docq/cli.py` (`build` gains `--workers`)
 - Test: `tests/test_enrich.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -596,9 +596,9 @@ Add to `tests/test_enrich.py`:
 ```python
 def test_enrich_units_concurrent_writes_all_without_dupes(tmp_path):
     import json
-    from gloss.segment import RawUnit
-    from gloss.extract import StubExtractor
-    from gloss.enrich import enrich_units
+    from docq.segment import RawUnit
+    from docq.extract import StubExtractor
+    from docq.enrich import enrich_units
     units = [RawUnit(f"passage number {i}", "6", "6.1", 50) for i in range(20)]
     sect = {"6.1": "section text"}
     stub = StubExtractor({"principle": "general-purpose", "type": "rationale",
@@ -620,7 +620,7 @@ Expected: FAIL (`enrich_units()` got an unexpected keyword argument `max_workers
 
 - [ ] **Step 3: Refactor `enrich.py`**
 
-Add `import time` and `import threading` and `from concurrent.futures import ThreadPoolExecutor` to the top of `src/gloss/enrich.py`. Extract the per-unit work into a helper and rewrite `enrich_units`:
+Add `import time` and `import threading` and `from concurrent.futures import ThreadPoolExecutor` to the top of `src/docq/enrich.py`. Extract the per-unit work into a helper and rewrite `enrich_units`:
 
 ```python
 def _enrich_one(unit: RawUnit, section_texts, extractor: StructuredExtractor, *,
@@ -697,7 +697,7 @@ Expected: PASS (new concurrency test + the existing serial enrich tests — the 
 
 - [ ] **Step 5: Thread `workers` through `run_build`**
 
-In `src/gloss/build.py`, add `workers: int = 1` to the `run_build` signature (after `build_dir`), and pass it to the enrich call:
+In `src/docq/build.py`, add `workers: int = 1` to the `run_build` signature (after `build_dir`), and pass it to the enrich call:
 
 ```python
         rows = enrich_units(units, section_texts, extractor, card=card, template=template,
@@ -706,7 +706,7 @@ In `src/gloss/build.py`, add `workers: int = 1` to the `run_build` signature (af
 
 - [ ] **Step 6: Add `--workers` to the CLI**
 
-In `src/gloss/cli.py`, in the `build` subparser block add:
+In `src/docq/cli.py`, in the `build` subparser block add:
 
 ```python
     b.add_argument("--workers", type=int, default=1, help="concurrent enrichment requests")
@@ -729,7 +729,7 @@ Expected: PASS (all tests, including the stdlib-contract test — `enrich.py` is
 
 - [ ] **Step 8: Smoke-test concurrency against the real model on one chapter**
 
-Run: `uv run --extra build gloss build --chapter 6 --model devstral-small-2:24b-cloud --db build/ch6.db --workers 8`
+Run: `uv run --extra build docq build --chapter 6 --model devstral-small-2:24b-cloud --db build/ch6.db --workers 8`
 Expected: completes faster than serial, `built ~21 units (0 enrichment failures)`. Spot-check a retrieve to confirm quality is unchanged.
 
 - [ ] **Step 9: Commit**
@@ -749,8 +749,8 @@ Compare the quality candidate against devstral on the strengthened eval, then lo
 Run:
 ```bash
 uv run --extra build python -c "
-from gloss.extract import OllamaExtractor
-from gloss.enrich import Enrichment
+from docq.extract import OllamaExtractor
+from docq.enrich import Enrichment
 out = OllamaExtractor('minimax-m3:cloud').extract('Classify: a deep module hides complexity behind a simple interface.', Enrichment, system='Return retrieval metadata.')
 print(out.model_dump())
 "
@@ -759,15 +759,15 @@ Expected: a populated `Enrichment` (proves `function_calling` works before a ful
 
 - [ ] **Step 2: Full-book build with minimax (concurrent)**
 
-Run: `uv run --extra build gloss build --model minimax-m3:cloud --db build/aposd-minimax.db --workers 8`
+Run: `uv run --extra build docq build --model minimax-m3:cloud --db build/aposd-minimax.db --workers 8`
 Expected: `built N units` with few/no failures. Resume across quota caps with `--resume`.
 
 - [ ] **Step 3: Compare eval hit-rates**
 
 Run:
 ```bash
-uv run --extra build gloss eval --db build/aposd.db          # devstral
-uv run --extra build gloss eval --db build/aposd-minimax.db  # minimax
+uv run --extra build docq eval --db build/aposd.db          # devstral
+uv run --extra build docq eval --db build/aposd-minimax.db  # minimax
 ```
 Expected: two hit-rates. If minimax is not clearly better, keep devstral (cheaper). Lock the choice and record it in the handoff. Spot-check a few queries side by side, not just the aggregate.
 

@@ -1,8 +1,8 @@
-# Session handoff — 2026-06-10 (gloss / aposd-embedded)
+# Session handoff — 2026-06-10 (docq / aposd-embedded)
 
 ## Status: Chapter-6 slice complete and working ✅
 
-The `gloss` engine + APOSD instance are built, reviewed, and **proven end-to-end on Chapter 6**.
+The `docq` engine + APOSD instance are built, reviewed, and **proven end-to-end on Chapter 6**.
 Branch `impl/ch6-slice` (not merged to `main`). **28 tests pass** (`uv run --extra build pytest -q`).
 The real Ch.6 build produced **21 units, 0 failures**, and retrieval returns the right primary-source
 passages with citations (e.g. "separate backspace/delete methods" → §6.4 "the backspace method was a
@@ -10,23 +10,23 @@ false abstraction"). Plan: `docs/superpowers/plans/2026-06-10-aposd-embedded.md`
 `docs/superpowers/specs/2026-06-10-aposd-embedded-design.md`.
 
 ## Architecture (one paragraph)
-`gloss` is a corpus-agnostic **engine** (`src/gloss/`); APOSD is an **instance** (`corpora/aposd/`).
+`docq` is a corpus-agnostic **engine** (`src/docq/`); APOSD is an **instance** (`corpora/aposd/`).
 Pipeline: `parse` (PyMuPDF font-aware → Elements) → `segment` (deterministic units + per-section text)
 → `enrich` (LLM metadata via the `StructuredExtractor` seam, checkpointed) → `store` (SQLite/FTS5,
 BM25 + metadata filter, **stdlib-only**). `cli` exposes `retrieve`/`build`/`eval`; `build` orchestrates;
 `taxonomy` renders the per-principle card; `evalrun` scores hit-rate. The **query path is stdlib-only**
-(guarded by `tests/test_stdlib_contract.py`) so `gloss.db` + a script drop into any repo with nothing installed.
+(guarded by `tests/test_stdlib_contract.py`) so `docq.db` + a script drop into any repo with nothing installed.
 
 ## How to run
 ```bash
 # Build a chapter (build-time deps via --extra build). Checkpoints to build/ch<N>/units.jsonl.
-uv run --extra build gloss build --chapter 6 --model devstral-small-2:24b-cloud --db build/ch6.db
+uv run --extra build docq build --chapter 6 --model devstral-small-2:24b-cloud --db build/ch6.db
 #   --resume        continue from the checkpoint (a quota cap / crash resumes from the last unit)
 #   (no --resume)   wipes the checkpoint and rebuilds fresh
 # Eval (needs the build extra for pyyaml):
-uv run --extra build gloss eval --db build/ch6.db
+uv run --extra build docq eval --db build/ch6.db
 # Retrieve (STDLIB-ONLY — no extra needed):
-uv run gloss retrieve "should I make this API general purpose" --db build/ch6.db -k 3 [--principle general-purpose] [--type red_flag] [--json]
+uv run docq retrieve "should I make this API general purpose" --db build/ch6.db -k 3 [--principle general-purpose] [--type red_flag] [--json]
 # Tests:
 uv run --extra build pytest -q
 ```
@@ -50,7 +50,7 @@ The `StructuredExtractor` auto-discovers the method (tries `json_schema` → fal
 - **Taxonomy (full-book only):** coarse `principle` = the skill's 6; the 7 no-fit book chapters are
   `principle: null` (still retrievable by text/topic). Promote-candidates if extending: *Define Errors
   Out of Existence*, *Choosing Names*, *Design it Twice*. (Ch.6 = `general-purpose`, a clean fit.)
-- **Engine package name:** `gloss` (working title; alternatives in `notes/2026-06-10-naming.md`).
+- **Engine package name:** `docq` (working title; alternatives in `notes/2026-06-10-naming.md`).
 - **Distribution:** deferred (bundle `aposd.db` as package data later; Spencer leads).
 
 ## Surprises / fixes this session
@@ -79,6 +79,6 @@ The `StructuredExtractor` auto-discovers the method (tries `json_schema` → fal
 - **Task 12 — full-book build:** finalize the taxonomy gap (null vs promote), build all 188 pages with
   the chosen model, verify per-chapter `chapter_pages`, tune BM25 weights, add real eval cases.
   Checkpoint/resume across quota resets.
-- **Task 13 — distribution:** bundle `aposd.db` as package data (`importlib.resources`), `uvx gloss`. (Spencer.)
+- **Task 13 — distribution:** bundle `aposd.db` as package data (`importlib.resources`), `uvx docq`. (Spencer.)
 - **Skill integration (deferred, do not edit the skill yet):** wire the design skill to call
-  `gloss retrieve --json` for primary-source passages on a design situation.
+  `docq retrieve --json` for primary-source passages on a design situation.

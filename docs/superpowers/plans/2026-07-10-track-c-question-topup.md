@@ -27,7 +27,7 @@ Persistence goes through checkpoints, not the db (a rebuild must not lose the
 top-up). The checkpoint format already supports supersede-by-key (last-wins on
 read-back, `enrich.py`), so:
 
-1. New build-extra subcommand `gloss enrich-questions --db … --build-dir … --model
+1. New build-extra subcommand `docq enrich-questions --db … --build-dir … --model
    minimax-m3:cloud --workers 8`:
    for each row in each chapter's `units.jsonl` (deduped by key, `needs_enrich=0`
    only), call the extractor with a focused prompt — passage + its existing
@@ -40,8 +40,8 @@ read-back, `enrich.py`), so:
    field) so the stub-testing seam works.
 2. Rebuild + re-embed:
    ```bash
-   uv run --extra build gloss build --resume --db build/minimax-v2.db --build-dir build/minimax-v2
-   uv run gloss embed --db build/minimax-v2.db      # rebuild wiped the vectors
+   uv run --extra build docq build --resume --db build/minimax-v2.db --build-dir build/minimax-v2
+   uv run docq embed --db build/minimax-v2.db      # rebuild wiped the vectors
    ```
    The `--resume` does zero enrichment (all keys present) and ships the merged
    questions.
@@ -55,7 +55,7 @@ sibling `prompt-questions.md` — follow the existing `<!-- SYSTEM -->`/
 
 Before: snapshot per-case ranks (hybrid) to a scratch JSON. After rebuild+re-embed:
 
-1. `gloss eval --db build/minimax-v2.db --mode hybrid` + paired comparison vs the
+1. `docq eval --db build/minimax-v2.db --mode hybrid` + paired comparison vs the
    snapshot (`evalrun.paired_sign_flip`). Gate: net non-negative, and specifically
    check whether previously-missing cases now appear (report which).
 2. Re-run the multiplicity-bias probe (correlation of #vectors-per-unit vs top-5
@@ -71,7 +71,7 @@ build/minimax-v2.pre-topup` before starting.**
 
 ## Files
 
-`src/gloss/enrich.py` (or new `topup.py` if cleaner), `src/gloss/cli.py` (subcommand),
+`src/docq/enrich.py` (or new `topup.py` if cleaner), `src/docq/cli.py` (subcommand),
 `corpora/aposd/prompt.md` or sibling, `tests/test_enrich.py` additions (stub-driven:
 appends supersede-by-key; existing questions preserved; resumable; `needs_enrich=1`
 rows skipped), `docs/BUILDS.md`, `docs/CLI.md`, `docs/DESIGN.md`.

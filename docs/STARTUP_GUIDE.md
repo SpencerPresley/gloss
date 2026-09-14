@@ -1,6 +1,6 @@
 # Startup Guide — getting to a queryable APOSD corpus
 
-A repeatable runbook for going from a fresh checkout to a working `gloss retrieve`.
+A repeatable runbook for going from a fresh checkout to a working `docq retrieve`.
 Each section is **check first, act only if needed** — safe to re-run. For the terse
 command reference see [`../CLAUDE.md`](../CLAUDE.md); for the why/overview see
 [`../README.md`](../README.md).
@@ -64,7 +64,7 @@ also embedded for hybrid retrieval: `sqlite3 <db> "SELECT COUNT(*) FROM vectors;
 ## Step 3 — Build the corpus (needs the `build` extra + an Ollama model)
 
 Build is a single end-to-end command: parse → segment → enrich (LLM) → SQLite/FTS5.
-There is **no separate "analyze" step** — `gloss build` does it all and writes the `.db`.
+There is **no separate "analyze" step** — `docq build` does it all and writes the `.db`.
 
 **Pick a model.** Get exact tags with `ollama ls`. The two we use:
 
@@ -79,12 +79,12 @@ don't overwrite each other.
 **Full-book build** (188 pages; concurrent enrichment):
 ```bash
 # MiniMax M3
-uv run --extra build gloss build \
+uv run --extra build docq build \
   --model minimax-m3:cloud --workers 8 \
   --db build/minimax-v2.db --build-dir build/minimax-v2
 
 # …or GLM 5.2
-uv run --extra build gloss build \
+uv run --extra build docq build \
   --model glm-5.2:cloud --workers 8 \
   --db build/glm52.db --build-dir build/glm52
 ```
@@ -95,14 +95,14 @@ warns and you can `--resume` to retry only the failed units.
 
 **Smoke-test one chapter first** (fast, cheap) before committing to the whole book:
 ```bash
-uv run --extra build gloss build --chapter 6 \
+uv run --extra build docq build --chapter 6 \
   --model minimax-m3:cloud --db build/ch6.db --build-dir build/ch6
 ```
 
 **Resume an interrupted/partial build** (keeps existing checkpoints, re-enriches only
 failed units):
 ```bash
-uv run --extra build gloss build --model minimax-m3:cloud --workers 8 \
+uv run --extra build docq build --model minimax-m3:cloud --workers 8 \
   --db build/minimax-v2.db --build-dir build/minimax-v2 --resume
 ```
 
@@ -115,11 +115,11 @@ One pass writes per-unit vectors into the same `.db`, enabling the hybrid
 Needs the embedding model pulled once (`ollama pull embeddinggemma`):
 
 ```bash
-uv run gloss embed --db build/minimax-v2.db
+uv run docq embed --db build/minimax-v2.db
 # embedded 197 units -> 1493 vectors (dim=768, model=embeddinggemma:latest) ...
 ```
 
-~16 seconds. **Re-run this after every `gloss build`** — a build overwrites the db
+~16 seconds. **Re-run this after every `docq build`** — a build overwrites the db
 file, so vectors don't survive it. Skipping this step is fine: retrieval works
 lexical-only, with nothing running.
 
@@ -128,7 +128,7 @@ lexical-only, with nothing running.
 ## Step 5 — Verify retrieval works
 
 ```bash
-uv run gloss retrieve "should I make this API general purpose" \
+uv run docq retrieve "should I make this API general purpose" \
   --db build/minimax-v2.db -k 3
 ```
 You should get cited passages (`[principle §section p.N] (type via lex#1+sem#2)` +
@@ -146,8 +146,8 @@ and the tag is absent. Add `--json` for structured output, filter with
 Eval is the only way to answer "is this model's corpus actually good" — hit@k / hit@1 /
 MRR over `corpora/aposd/cases.yaml` (31 cases):
 ```bash
-uv run --extra build gloss eval --db build/minimax-v2.db                # lexical
-uv run --extra build gloss eval --db build/minimax-v2.db --mode hybrid  # needs Step 4
+uv run --extra build docq eval --db build/minimax-v2.db                # lexical
+uv run --extra build docq eval --db build/minimax-v2.db --mode hybrid  # needs Step 4
 ```
 Current numbers (k=5): lexical `hit@5=0.84 hit@1=0.55 mrr=0.66`, hybrid
 `hit@5=0.94 hit@1=0.71 mrr=0.80`. Add `--vs lexical` to a hybrid eval to get a
@@ -162,7 +162,7 @@ PDF at resources/…compress.pdf?  ── no ──► Step 1 (curl)
             │ yes
 build/<model>.db with 197 units? ── no ──► Step 3 (build, minimax-m3 or glm-5.2)
             │ yes
-db has vectors (COUNT(*) FROM vectors)? ── no ──► Step 4 (gloss embed, ~16s)
+db has vectors (COUNT(*) FROM vectors)? ── no ──► Step 4 (docq embed, ~16s)
             │ yes
             ▼
    retrieve --db build/<model>.db   (Step 5)

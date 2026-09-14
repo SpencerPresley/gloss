@@ -1,6 +1,6 @@
 # Design — Decisions & Tradeoffs
 
-The *why* behind gloss. Each entry: the decision, the rationale, and a pointer to the
+The *why* behind docq. Each entry: the decision, the rationale, and a pointer to the
 spec/plan/note section with the full argument. This is a curated index, not a re-derivation —
 read the linked source for the complete reasoning.
 
@@ -21,8 +21,8 @@ Sources distilled (all under `docs/superpowers/`):
 
 ## Framing
 
-**The retriever is itself an APOSD-shaped tool, by design.** gloss is the *deep module* (the whole
-book's wisdom) behind a one-line interface (`gloss retrieve`), lazily surfaced by a *shallow* skill.
+**The retriever is itself an APOSD-shaped tool, by design.** docq is the *deep module* (the whole
+book's wisdom) behind a one-line interface (`docq retrieve`), lazily surfaced by a *shallow* skill.
 We are building an APOSD-shaped tool out of APOSD — the spec uses the book's own vocabulary to
 justify the architecture. (spec §1)
 
@@ -63,7 +63,7 @@ The channel that was added differs from the reserved design in one important way
 channels fused with RRF, not a rerank hook** — a reranker over BM25's candidates can't recover a
 passage BM25 never surfaced (a recall failure), only reorder ranking failures. Shape:
 
-- `gloss embed` post-pass: per-unit vectors (a *gist* of the generated metadata, one vector **per
+- `docq embed` post-pass: per-unit vectors (a *gist* of the generated metadata, one vector **per
   generated question** — doc2query made dense, so a query matches a question by meaning rather than
   shared tokens — and chunked verbatim text) stored as float32 BLOBs in the **same** `.db`
   (embeddinggemma via local Ollama, 768-dim, ~1.5k vectors, ~16s, +5 MB).
@@ -236,7 +236,7 @@ every build to (a) answer "is the expensive model worth it" with numbers, (b) tu
 
 ### 13. Engine/instance split — corpus-agnostic engine, per-book instances
 
-The engine (`src/gloss/`) is corpus-agnostic; everything APOSD-specific lives in `corpora/aposd/`
+The engine (`src/docq/`) is corpus-agnostic; everything APOSD-specific lives in `corpora/aposd/`
 (`profile.py`, `taxonomy.yaml`, `prompt.md`, `cases.yaml`, the source PDF). Profile / taxonomy /
 prompt / corpus-path are *loaded inputs*, never hardcoded in engine logic. A second corpus is a new
 directory, not a refactor. Reinforced by dynamic chapter detection: `Profile.chapter_re`
@@ -250,8 +250,8 @@ detection. (spec §13 #10; `plans/2026-06-10-aposd-full-book-build.md` task 1 + 
 The query interface is a CLI invoked by shelling out, not an MCP server. A CLI costs zero standing
 context (MCP loads tool schemas into every session and needs a running process), composes with
 skills/subagents, and is portable into any repo (any agent can shell out). The skill is wired
-(2026-07-10): its "Consulting the Source" section queries `gloss retrieve --compact` when the corpus
-db exists and expands runner-up previews with `gloss show <id>`, falling back to the bundled
+(2026-07-10): its "Consulting the Source" section queries `docq retrieve --compact` when the corpus
+db exists and expands runner-up previews with `docq show <id>`, falling back to the bundled
 references when it doesn't. The steering (symptom phrasing, channel-tag trust rules, never answering
 from a preview paraphrase) is encoded once in the skill instead of per-use by the user. (spec §12)
 
@@ -261,16 +261,15 @@ Corpus PDFs are large + copyrighted; built dbs are regenerable. Both are gitigno
 (`resources/*.pdf`, `build/`, `*.jsonl`). The engine and tooling are MIT-licensed; the taxonomy and
 the skill are distillations of Ousterhout's book kept as development input. Building a corpus requires
 your own copy of the source. Whether to ship a prebuilt db as package data (`importlib.resources`,
-`uvx gloss retrieve`) is a deferred distribution decision. (spec §11; README "Provenance & license";
+`uvx docq retrieve`) is a deferred distribution decision. (spec §11; README "Provenance & license";
 `.gitignore`)
 
-### 16. The name "gloss" is a working title
+### 16. The name "docq" describes the agent-facing operation
 
-A *gloss* is an explanatory note attached to a passage — exactly what the engine adds to verbatim
-passages (`context_line`, `applies_when`, `key_terms`). It may change. Alternatives kept on record:
-*florilegium* (most precise for the artifact, but long), *concordance*, *lectern*, *vade*, *cite*. The
-APOSD instance stays `corpora/aposd/` and its artifact `aposd.db` regardless.
-(`notes/2026-06-10-naming.md`; README status line)
+`docq` means "document query": short enough for repeated shell use and descriptive enough that an
+agent does not need project-specific naming lore to infer its purpose. It replaced the working title
+`gloss`, whose literary meaning was accurate but opaque to an unfamiliar agent. The APOSD instance
+stays `corpora/aposd/` and its artifact `aposd.db` regardless.
 
 ---
 
@@ -278,7 +277,7 @@ APOSD instance stays `corpora/aposd/` and its artifact `aposd.db` regardless.
 
 Every knob change goes through `corpora/aposd/cases.yaml` (**n=266 since the Track D merge**;
 history below this point was measured at n=31 — those numbers do not transfer) and
-`gloss eval --mode A --vs B` — a paired sign-flip randomization test on per-case reciprocal rank
+`docq eval --mode A --vs B` — a paired sign-flip randomization test on per-case reciprocal rank
 (`evalrun.py:paired_sign_flip`). House rule at n=266: **one case ≈ 0.4 points of hit@1** —
 adopt on p-value, or on measured mechanism + zero regressions, and record which. Slice any
 delta by tranche (markers in cases.yaml): a change that helps clean slices but regresses the
@@ -324,7 +323,7 @@ Read of the table:
 
 **Query-side finding — skill-primed rewrite A/B (measured 2026-07-10).** Design: 7 fresh
 agents, each given only SKILL.md + a stride-split batch of the 266 raw case queries
-(blind to pins, corpus, and metadata), produced "the query you'd pass to `gloss
+(blind to pins, corpus, and metadata), produced "the query you'd pass to `docq
 retrieve`" per situation; rewrites scored against the same pins, paired sign-flip vs
 raw, hybrid mode. Result: **hit@1 0.673 → 0.744, Δmrr=+0.053, p=0.0045** (55 better /
 30 worse / 181 same). Per-slice: dev-voice +0.061 (p=0.017), audit hit@1 0.33→0.50,
@@ -354,7 +353,7 @@ Measured diagnostics on the embedded corpus (1,493 × 768 vectors):
   corpus size.
 
 **Corpus-side finding — question top-up (Track C, measured 2026-07-10/11).** Design:
-second enrichment pass (`gloss enrich-questions`) asked minimax-m3:cloud for 4–6 NEW
+second enrichment pass (`docq enrich-questions`) asked minimax-m3:cloud for 4–6 NEW
 questions per unit from angles the first pass didn't cover (mid-task complaint,
 code-review comment, permission phrasing, consequence phrasing); prompt written from
 passage + principle card only, cases.yaml never opened (anti-Goodhart); 316 checkpoint
@@ -421,7 +420,7 @@ C-speed; stdlib-only portability is a core invariant).
 2. **Interface pack.** `--match raw` passthrough to FTS5's native query syntax (AND/OR/NOT,
    "phrases", NEAR(), `key_terms:` column filters, `&&`/`||` sugar); `--explain` per hit
    (winning channel, vector kind — gist/question #i/text chunk — and the matched question
-   text); `gloss facets` vocabulary dump; result filters `--cliff <frac-of-top>`,
+   text); `docq facets` vocabulary dump; result filters `--cliff <frac-of-top>`,
    `--require-agreement`, `--min-sem <cos>` (no absolute RRF threshold — fused scores aren't
    comparable across queries). Doubles as the query-log source for #1.
 3. **Learned fusion, only after #1.** Tiny learning-to-rank: logistic regression / coordinate
@@ -508,7 +507,7 @@ cases need a small evalrun extension first.
 
 ## Status & known limitations (from README + handoffs)
 
-gloss is **early** and a **working prototype, not a finished product**. The full APOSD corpus builds
+docq is **early** and a **working prototype, not a finished product**. The full APOSD corpus builds
 end-to-end, hybrid retrieval scores hit@5=0.94 / hit@1=0.71 / MRR=0.80 on the eval set, but:
 
 - The eval set is **266 cases** (31 curated + 235 synthetic in five sliceable tranches; see
@@ -529,7 +528,7 @@ end-to-end, hybrid retrieval scores hit@5=0.94 / hit@1=0.71 / MRR=0.80 on the ev
 - The redundant LLM `principle` field should be dropped (generated then always overridden, §8 above).
 - The FTS trigger is insert-only (assumes wholesale rebuild); incremental writes would need
   UPDATE/DELETE triggers.
-- Vectors don't survive `gloss build` (the db file is overwritten) — re-run `gloss embed`. An
+- Vectors don't survive `docq build` (the db file is overwritten) — re-run `docq embed`. An
   embed-if-vectors-existed convenience is a possible follow-up.
 
 (README status line; `notes/2026-06-10-full-book-build-handoff.md` "Known gaps")
@@ -538,7 +537,7 @@ end-to-end, hybrid retrieval scores hit@5=0.94 / hit@1=0.71 / MRR=0.80 on the ev
 
 ## Explicit non-goals (YAGNI)
 
-From spec §2 — gloss is deliberately **not**: a vector database as the core (vectors are an
+From spec §2 — docq is deliberately **not**: a vector database as the core (vectors are an
 optional second channel in the same SQLite file — never the required path, never a separate store,
 no ANN library); a conversational RAG Q&A bot; an OCR pipeline (the full book has a clean text
 layer; the 20-page vector-outline extract is out of scope); an agentic build harness (the build is a

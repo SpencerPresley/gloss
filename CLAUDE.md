@@ -6,11 +6,11 @@ deeper — don't infer from this page.
 
 ## What it is
 
-`gloss` turns a source text into a portable, **cited** SQLite/FTS5 corpus you search by
+`docq` turns a source text into a portable, **cited** SQLite/FTS5 corpus you search by
 free-text query + metadata, getting back the source's *actual passages* (not a paraphrase).
 Retrieval is hybrid — BM25 + an optional vector channel (RRF-fused, per-channel rank tags
 on every hit) — falling back to pure lexical when the db has no vectors or Ollama is down.
-A corpus-agnostic **engine** (`src/gloss/`) + per-book **instances** (`corpora/<name>/`).
+A corpus-agnostic **engine** (`src/docq/`) + per-book **instances** (`corpora/<name>/`).
 Only instance so far: `aposd` (Ousterhout's *A Philosophy of Software Design*). Query-time
 is stdlib-packages-only (hybrid additionally wants a local Ollama *service*); build-time
 needs the `build` extra + an Ollama model.
@@ -32,13 +32,13 @@ needs the `build` extra + an Ollama model.
 
 ```bash
 # query (stdlib-only; hybrid when the db is embedded, lexical otherwise) — flags in docs/CLI.md
-uv run gloss retrieve "<query>" --db build/minimax-v2.db -k 3
+uv run docq retrieve "<query>" --db build/minimax-v2.db -k 3
 
 # embed the semantic channel into the db (stdlib-only; needs local Ollama + embeddinggemma)
-uv run gloss embed --db build/minimax-v2.db
+uv run docq embed --db build/minimax-v2.db
 
 # build (needs `build` extra + Ollama model + source PDF) — internals in docs/BUILDS.md
-uv run --extra build gloss build --model minimax-m3:cloud --workers 8 \
+uv run --extra build docq build --model minimax-m3:cloud --workers 8 \
     --db build/minimax-v2.db --build-dir build/minimax-v2
 
 # tests (no model, no corpus needed)
@@ -47,10 +47,10 @@ uv run --extra build pytest -q
 
 ## Three facts that bite
 
-1. **`--db` is required (no default), and the live db is model-named.** Builds go to
-   `build/<model>.db` (the real corpus today is **`build/minimax-v2.db`**, 197 units;
-   `build/minimax.db` is the stale pre-seg-fix 257-unit build) — pass `--db` explicitly
-   on every command. A stale 0-byte `build/aposd.db` left by an old build will open but
+1. **The live db is configured and model-named.** This checkout's `.docq/config.json`
+   selects **`build/minimax-v2.db`** (197 units); `build/minimax.db` is the stale
+   pre-seg-fix 257-unit build. `--db` overrides configuration. A stale 0-byte
+   `build/aposd.db` left by an old build will open but
    error → `OperationalError: no such table: units_fts`; verify with
    `sqlite3 <db> "SELECT COUNT(*) FROM units;"`.
 2. **Verbatim text and the coarse `principle` are not the LLM's.** Unit boundaries + text
@@ -58,7 +58,7 @@ uv run --extra build pytest -q
    prose); `principle` is set from the taxonomy. The LLM only writes *retrieval metadata*
    (context line, symptom questions, key terms). So retrieval always returns the source's
    own words. (Details in `docs/ARCHITECTURE.md`.)
-3. **Vectors don't survive a rebuild.** `gloss build` overwrites the db file, wiping the
-   `vectors` table — re-run `gloss embed --db <db>` (~16s) after every build, or hybrid
+3. **Vectors don't survive a rebuild.** `docq build` overwrites the db file, wiping the
+   `vectors` table — re-run `docq embed --db <db>` (~16s) after every build, or hybrid
    silently degrades to lexical (no `via` tags on hits). Check with
    `sqlite3 <db> "SELECT COUNT(*) FROM vectors;"`.

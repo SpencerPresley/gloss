@@ -1,23 +1,23 @@
 # Builds
 
-Operational reference for `gloss build` — checkpoints, resume, concurrency, model
+Operational reference for `docq build` — checkpoints, resume, concurrency, model
 selection, and troubleshooting. For the fresh-checkout runbook (fetch the PDF, build,
 verify retrieval) see [STARTUP_GUIDE.md](STARTUP_GUIDE.md); this doc covers the build
 internals, not the first-run steps.
 
 ## Build is one command
 
-`gloss build` is the whole pipeline — parse → segment → enrich (LLM) → SQLite/FTS5 —
+`docq build` is the whole pipeline — parse → segment → enrich (LLM) → SQLite/FTS5 —
 in a single invocation. There is **no separate `analyze` step**; the command writes
 the finished `.db`. Build-time deps (`pymupdf`, `langchain`, `langchain-ollama`) plus
 an Ollama model are required, so always run it under the `build` extra:
 
 ```bash
-uv run --extra build gloss build --model minimax-m3:cloud --workers 8 \
+uv run --extra build docq build --model minimax-m3:cloud --workers 8 \
   --db build/minimax-v2.db --build-dir build/minimax-v2
 ```
 
-`run_build` (`src/gloss/build.py:47`) does it all: resolve per-chapter element spans
+`run_build` (`src/docq/build.py:47`) does it all: resolve per-chapter element spans
 (dynamic detection or `profile.chapter_pages` override), segment each span into units,
 build prompts, size `num_ctx` once over the whole build, enrich each chapter with its
 taxonomy principle card, accumulate every row, and call `build_db`. Expected tail:
@@ -27,7 +27,7 @@ built 197 units (0 enrichment failures) -> build/minimax-v2.db
 ```
 
 **A build overwrites the db file, so vectors do not survive it** — if the corpus is
-embedded for hybrid retrieval, re-run `gloss embed --db <db>` after every build
+embedded for hybrid retrieval, re-run `docq embed --db <db>` after every build
 (~16s; see [CLI.md](CLI.md#embed)).
 
 ## Pipeline, end to end
@@ -115,7 +115,7 @@ if not row.get("needs_enrich"):
   db. This is the zero-quota way to regenerate a `.db` from checkpoints:
 
 ```bash
-uv run --extra build gloss build --resume \
+uv run --extra build docq build --resume \
   --db build/minimax-v2.db --build-dir build/minimax-v2
 ```
 
@@ -138,10 +138,10 @@ read-back (last-wins), so the top-up rides the existing checkpoint mechanics:
   next rebuild, and a rebuild can't lose it. Ship with the zero-quota dance:
 
   ```bash
-  uv run --extra build gloss enrich-questions --build-dir build/minimax-v2 \
+  uv run --extra build docq enrich-questions --build-dir build/minimax-v2 \
       --model minimax-m3:cloud --workers 8
-  uv run --extra build gloss build --resume --db build/minimax-v2.db --build-dir build/minimax-v2
-  uv run gloss embed --db build/minimax-v2.db   # rebuild wiped the vectors (CLAUDE.md fact #3)
+  uv run --extra build docq build --resume --db build/minimax-v2.db --build-dir build/minimax-v2
+  uv run docq embed --db build/minimax-v2.db   # rebuild wiped the vectors (CLAUDE.md fact #3)
   ```
 
   The `--resume` does zero LLM work (all keys present) and ships the merged
@@ -195,10 +195,10 @@ would read back model A's enrichment. The per-model dir keeps them independent:
 
 ```bash
 # MiniMax M3
-uv run --extra build gloss build --model minimax-m3:cloud --workers 8 \
+uv run --extra build docq build --model minimax-m3:cloud --workers 8 \
   --db build/minimax.db --build-dir build/minimax
 # GLM 5.2 (separate db AND build-dir — coexists, no clobber)
-uv run --extra build gloss build --model glm-5.2:cloud --workers 8 \
+uv run --extra build docq build --model glm-5.2:cloud --workers 8 \
   --db build/glm52.db --build-dir build/glm52
 ```
 
@@ -272,8 +272,8 @@ The CLI default is `--model minimax-m3:cloud` (`cli.py`). Both build the full bo
 `corpora/aposd/cases.yaml` (31 cases as of 2026-07-10):
 
 ```bash
-uv run --extra build gloss eval --db build/minimax-v2.db                # lexical
-uv run --extra build gloss eval --db build/minimax-v2.db --mode hybrid  # needs gloss embed first
+uv run --extra build docq eval --db build/minimax-v2.db                # lexical
+uv run --extra build docq eval --db build/minimax-v2.db --mode hybrid  # needs docq embed first
 ```
 
 `eval` (`evalrun.py`) reports `hit@k`, `hit@1`, and `MRR` — a case hits if its top-k
@@ -290,7 +290,7 @@ DESIGN.md's experiment log):
 | `build/minimax-v2.db` embedded | semantic | 0.94 | 0.65 | 0.75 |
 | `build/minimax-v2.db` embedded | **hybrid** | **0.94** | **0.71** | **0.80** |
 
-Hybrid-vs-lexical: Δmrr=+0.136, p=0.037 (`gloss eval --db build/minimax-v2.db
+Hybrid-vs-lexical: Δmrr=+0.136, p=0.037 (`docq eval --db build/minimax-v2.db
 --mode hybrid --vs lexical`).
 
 On the expanded eval (k=5, n=266, hybrid): `build/glm5-2.db` (glm-5.2:cloud, original
@@ -307,8 +307,8 @@ the handoff notes isn't reproducible from what's checked in.) See
 ## Troubleshooting
 
 **`no such table: units_fts` / `no such table: units`** — the db is an empty 0-byte stub,
-not a real corpus. `--db` is required (no default — `cli.py:49`,`:59`,`:68`), so this comes
-from pointing `--db` at a stale 0-byte file like `build/aposd.db` that a prior run left
+not a real corpus. This comes from configuring or explicitly pointing `--db` at a stale
+0-byte file like `build/aposd.db` that a prior run left
 behind (never populated because the model build wrote elsewhere):
 
 ```bash
@@ -333,7 +333,7 @@ pre-code-attach build — still queryable, but stale). Point `--db` at a real db
 
 **Hybrid mode silently gone / `via` tags missing** — the db has no vectors (a rebuild
 wiped them) or Ollama isn't running. `auto` mode degrades to lexical by design; run
-`gloss embed --db <db>` and/or start Ollama. Check with
+`docq embed --db <db>` and/or start Ollama. Check with
 `sqlite3 <db> "SELECT COUNT(*) FROM vectors;"`.
 
 **Nonzero enrichment failures** — see [Enrichment failure handling](#enrichment-failure-handling).

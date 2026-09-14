@@ -45,6 +45,27 @@ uv run --extra build docq build --model minimax-m3:cloud --workers 8 \
 uv run --extra build pytest -q
 ```
 
+## Releasing
+
+A PyPI publish is incomplete until the matching Git tag and GitHub Release exist with release
+notes plus the wheel and sdist attached. Keep this manual and local unless Spencer explicitly
+chooses to automate it; `uv publish` reads `UV_PUBLISH_TOKEN` from the environment, and release
+commands must never print or interpolate that credential.
+
+1. Bump `[project].version` in `pyproject.toml`, run `uv sync`, and verify the lockfile records the
+   same version.
+2. Run `uv run --extra build pytest -q`, then `uv build` and inspect `dist/` for the versioned
+   wheel and `.tar.gz`.
+3. Commit the release, push `main`, create and push an annotated `v<version>` tag at that commit.
+4. Publish those exact artifacts with `uv publish`, then create `docq <version>` on GitHub from
+   the existing tag using `gh release create --verify-tag`, release notes, and both artifacts.
+5. Verify both surfaces with `uvx --refresh docq==<version> --help` and
+   `gh release view v<version> --repo SpencerPresley/docq`.
+
+Do not reuse a PyPI version: published files and metadata are immutable. If publishing fails after
+the Git tag exists, fix the release in a new version; if only the GitHub Release is missing, create
+it retrospectively from the existing tag without republishing PyPI.
+
 ## Three facts that bite
 
 1. **The live db is configured and model-named.** This checkout's `.docq/config.json`

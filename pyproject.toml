@@ -8,6 +8,12 @@ authors = [{ name = "Spencer Presley" }]
 requires-python = ">=3.12"
 dependencies = []  # query-time path is stdlib-only; nothing required to RUN `docq retrieve`
 
+[project.urls]
+Homepage = "https://github.com/SpencerPresley/docq"
+Repository = "https://github.com/SpencerPresley/docq"
+Issues = "https://github.com/SpencerPresley/docq/issues"
+Changelog = "https://github.com/SpencerPresley/docq/releases"
+
 [project.optional-dependencies]
 # Build-time only: parsing + LLM enrichment. Never imported on the query path.
 build = [

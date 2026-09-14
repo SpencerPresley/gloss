@@ -1,7 +1,7 @@
 """Lock the query-time stdlib-only contract.
 
-``gloss retrieve`` must run anywhere Python runs with nothing installed, so importing
-the query path (``gloss.cli`` + ``gloss.store``) must not pull in any build-only
+``docq retrieve`` must run anywhere Python runs with nothing installed, so importing
+the query path (``docq.cli`` + ``docq.store``) must not pull in any build-only
 dependency. Checked in a fresh interpreter so unrelated test imports don't pollute
 ``sys.modules``.
 """
@@ -13,7 +13,7 @@ _BUILD_ONLY = ("pymupdf", "fitz", "langchain", "langchain_ollama", "pydantic", "
 
 def test_retrieve_path_imports_no_build_deps():
     code = (
-        "import gloss.cli, gloss.store, gloss.vectors, gloss.rerank, sys\n"
+        "import docq.cli, docq.store, docq.vectors, docq.rerank, sys\n"
         f"bad = [m for m in sys.modules if m in {_BUILD_ONLY!r}]\n"
         "assert not bad, bad\n"
     )

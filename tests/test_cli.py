@@ -2,7 +2,7 @@ import json
 import subprocess
 import sys
 
-from gloss.store import build_db
+from docq.store import build_db
 
 _ROWS = [
     {"text": "A module with a complex interface for little functionality is shallow.",
@@ -25,7 +25,7 @@ _QUERY = "module interface complex changePosition"
 def test_retrieve_json(tmp_path):
     db = tmp_path / "aposd.db"
     build_db(_ROWS, db)
-    out = subprocess.run([sys.executable, "-m", "gloss.cli", "retrieve", _QUERY,
+    out = subprocess.run([sys.executable, "-m", "docq.cli", "retrieve", _QUERY,
                           "--db", str(db), "--json"], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     hits = json.loads(out.stdout)
@@ -35,7 +35,7 @@ def test_retrieve_json(tmp_path):
 def test_retrieve_text_no_matches(tmp_path):
     db = tmp_path / "aposd.db"
     build_db(_ROWS, db)
-    out = subprocess.run([sys.executable, "-m", "gloss.cli", "retrieve",
+    out = subprocess.run([sys.executable, "-m", "docq.cli", "retrieve",
                           "xyzzy nonexistent plugh", "--db", str(db)],
                          capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
@@ -45,7 +45,7 @@ def test_retrieve_text_no_matches(tmp_path):
 def test_retrieve_compact(tmp_path):
     db = tmp_path / "aposd.db"
     build_db(_ROWS, db)
-    out = subprocess.run([sys.executable, "-m", "gloss.cli", "retrieve", _QUERY,
+    out = subprocess.run([sys.executable, "-m", "docq.cli", "retrieve", _QUERY,
                           "--db", str(db), "--compact"], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     # hit #1: full verbatim passage
@@ -59,7 +59,7 @@ def test_retrieve_compact(tmp_path):
 def test_retrieve_compact_json_unchanged(tmp_path):
     db = tmp_path / "aposd.db"
     build_db(_ROWS, db)
-    base = [sys.executable, "-m", "gloss.cli", "retrieve", _QUERY, "--db", str(db), "--json"]
+    base = [sys.executable, "-m", "docq.cli", "retrieve", _QUERY, "--db", str(db), "--json"]
     plain = subprocess.run(base, capture_output=True, text=True)
     compact = subprocess.run(base + ["--compact"], capture_output=True, text=True)
     assert plain.returncode == compact.returncode == 0
@@ -69,7 +69,7 @@ def test_retrieve_compact_json_unchanged(tmp_path):
 def test_show(tmp_path):
     db = tmp_path / "aposd.db"
     build_db(_ROWS, db)
-    out = subprocess.run([sys.executable, "-m", "gloss.cli", "show", "1", "--db", str(db)],
+    out = subprocess.run([sys.executable, "-m", "docq.cli", "show", "1", "--db", str(db)],
                          capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
     assert "[deep-modules §4.5 p.45] (red_flag)" in out.stdout
@@ -80,7 +80,25 @@ def test_show(tmp_path):
 def test_show_unknown_id_errors(tmp_path):
     db = tmp_path / "aposd.db"
     build_db(_ROWS, db)
-    out = subprocess.run([sys.executable, "-m", "gloss.cli", "show", "999", "--db", str(db)],
+    out = subprocess.run([sys.executable, "-m", "docq.cli", "show", "999", "--db", str(db)],
                          capture_output=True, text=True)
     assert out.returncode != 0
     assert "id=999" in out.stderr
+
+
+def test_configured_db_is_used_and_cli_db_overrides_it(tmp_path):
+    configured = tmp_path / "configured.db"
+    override = tmp_path / "override.db"
+    build_db(_ROWS[:1], configured)
+    build_db(_ROWS[1:], override)
+    config = tmp_path / "config.json"
+    config.write_text(json.dumps({"db": str(configured)}))
+
+    base = [sys.executable, "-m", "docq.cli", "retrieve", _QUERY,
+            "--config", str(config), "--json"]
+    from_config = subprocess.run(base, capture_output=True, text=True)
+    from_override = subprocess.run(base + ["--db", str(override)], capture_output=True, text=True)
+
+    assert from_config.returncode == from_override.returncode == 0
+    assert json.loads(from_config.stdout)[0]["section"] == "4.5"
+    assert json.loads(from_override.stdout)[0]["section"] == "6.3"

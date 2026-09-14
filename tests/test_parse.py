@@ -6,8 +6,8 @@ structural Elements. The APOSD-specific knobs live in a Profile built inline her
 """
 from pathlib import Path
 
-from gloss.profile import Profile
-from gloss.parse import classify_font, parse_pdf
+from docq.profile import Profile
+from docq.parse import classify_font, parse_pdf
 
 
 def _aposd_profile(corpus_path: Path) -> Profile:

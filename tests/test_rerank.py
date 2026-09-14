@@ -1,8 +1,10 @@
-"""Rerank tests — no Ollama: ``chat_fn`` is injected. The contract under test:
-reranking may only REORDER; any failure returns the hits unchanged."""
+"""Rerank tests — no Ollama: ``chat_fn`` is injected."""
+import io
+import urllib.error
+
 import pytest
 
-from gloss.rerank import _parse_ids, rerank
+from docq.rerank import OllamaUnavailable, _parse_ids, _raise_ollama_error, rerank
 
 _HITS = [
     {"id": 1, "principle": "deep-modules", "section": "4.5", "type": "red_flag",
@@ -58,13 +60,51 @@ def test_rerank_salvages_imperfect_replies(reply, expected):
     assert all(h["reranked"] for h in out)
 
 
-def test_rerank_falls_back_on_transport_error(capsys):
+def test_rerank_does_not_hide_transport_error():
     def down(prompt):
-        raise OSError("connection refused")
+        raise OllamaUnavailable("cannot reach Ollama")
 
-    out = rerank("q", _HITS, chat_fn=down)
-    assert out is _HITS
-    assert "rerank skipped" in capsys.readouterr().err
+    with pytest.raises(OllamaUnavailable, match="cannot reach Ollama"):
+        rerank("q", _HITS, chat_fn=down)
+
+
+def test_ollama_404_names_missing_local_model_and_pull_command():
+    error = urllib.error.HTTPError(
+        "http://localhost:11434/api/chat", 404, "Not Found", {},
+        io.BytesIO(b'{"error":"model \'gemma3:1b\' not found"}'),
+    )
+
+    with pytest.raises(OllamaUnavailable) as raised:
+        _raise_ollama_error(error, model="gemma3:1b", base_url="http://localhost:11434")
+
+    message = str(raised.value)
+    assert "model 'gemma3:1b' not found" in message
+    assert "ollama pull gemma3:1b" in message
+
+
+def test_connection_refused_names_ollama_url():
+    error = urllib.error.URLError(ConnectionRefusedError(61, "Connection refused"))
+
+    with pytest.raises(OllamaUnavailable) as raised:
+        _raise_ollama_error(error, model="gemma4:e2b", base_url="http://localhost:11434")
+
+    assert "cannot reach Ollama at http://localhost:11434" in str(raised.value)
+
+
+@pytest.mark.parametrize(("code", "body", "expected"), [
+    (401, b'{"error":"Unauthorized"}', "ollama signin"),  # observed signed out, 2026-09-14
+    (403, b'{"error":"cloud account rejected the request"}', "ollama signin"),
+    (402, b'{"error":"cloud account rejected the request"}', "no available usage"),
+    (429, b'{"error":"cloud account rejected the request"}', "usage limit"),
+])
+def test_cloud_account_errors_are_distinguished(code, body, expected):
+    error = urllib.error.HTTPError(
+        "http://localhost:11434/api/chat", code, "Cloud error", {},
+        io.BytesIO(body),
+    )
+
+    with pytest.raises(OllamaUnavailable, match=expected):
+        _raise_ollama_error(error, model="glm-5.3:cloud", base_url="http://localhost:11434")
 
 
 def test_rerank_short_circuits_below_two():

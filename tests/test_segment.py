@@ -7,9 +7,9 @@ segmentation rule is tested in isolation from parsing.
 """
 from pathlib import Path
 
-from gloss.parse import Element
-from gloss.profile import Profile
-from gloss.segment import segment, RawUnit
+from docq.parse import Element
+from docq.profile import Profile
+from docq.segment import segment, RawUnit
 
 
 def _profile() -> Profile:
@@ -124,8 +124,8 @@ def test_segment_stops_at_next_chapter_title():
 
 
 def test_split_chapters_groups_by_marker():
-    from gloss.parse import Element
-    from gloss.segment import split_chapters
+    from docq.parse import Element
+    from docq.segment import split_chapters
     els = [
         Element("heading", "Preface", 9, 1),            # front matter -> dropped
         Element("para", "preface body", 9),
@@ -149,9 +149,9 @@ def test_split_chapters_groups_by_marker():
 
 
 def test_split_chapters_empty_without_marker():
-    from gloss.parse import Element
-    from gloss.profile import Profile
-    from gloss.segment import split_chapters
+    from docq.parse import Element
+    from docq.profile import Profile
+    from docq.segment import split_chapters
     no_re = Profile(corpus_path=Path("x"), code_font="Typewriter", head_font="NimbusSanL-Bol",
                     chapter_size=20.0, section_size=16.0, figure_min_area=5000,
                     section_re=r"^(\d+\.\d+)")  # chapter_re defaults to ""
@@ -160,9 +160,9 @@ def test_split_chapters_empty_without_marker():
 
 
 def test_split_chapters_real_pdf_finds_all_21(corpus_path):
-    from gloss.build import load_profile
-    from gloss.parse import parse_pdf
-    from gloss.segment import split_chapters
+    from docq.build import load_profile
+    from docq.parse import parse_pdf
+    from docq.segment import split_chapters
     profile = load_profile(Path("corpora/aposd"))
     els = parse_pdf(corpus_path, None, None, profile)
     chapters = split_chapters(els, profile)
@@ -173,9 +173,9 @@ def test_last_chapter_span_excludes_back_matter(corpus_path):
     # ch21's span runs to end-of-document, but segment must trim trailing back matter
     # (Index p178+, summaries p185-187, About p188). Pins the otherwise-unenforced
     # invariant that the post-chapter divider is detected and stops segmentation.
-    from gloss.build import load_profile
-    from gloss.parse import parse_pdf
-    from gloss.segment import segment, split_chapters
+    from docq.build import load_profile
+    from docq.parse import parse_pdf
+    from docq.segment import segment, split_chapters
     profile = load_profile(Path("corpora/aposd"))
     els = parse_pdf(corpus_path, None, None, profile)
     chapters = dict(split_chapters(els, profile))

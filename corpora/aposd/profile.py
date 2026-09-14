@@ -1,6 +1,6 @@
-"""APOSD instance profile for the gloss engine."""
+"""APOSD instance profile for the docq engine."""
 from pathlib import Path
-from gloss.profile import Profile
+from docq.profile import Profile
 
 _REPO = Path(__file__).resolve().parents[2]
 

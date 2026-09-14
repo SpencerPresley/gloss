@@ -1,4 +1,4 @@
-"""gloss — structured lexical retrieval from documents.
+"""docq — structured lexical retrieval from documents.
 
 Turn a source text into a portable, cited, principle-anchored corpus that an
 agent can query for the relevant primary-source passages given a situation.

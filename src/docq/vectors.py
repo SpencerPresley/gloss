@@ -172,7 +172,7 @@ def _has_vectors(con: sqlite3.Connection) -> bool:
 def _query_vector(con: sqlite3.Connection, query: str, base_url: str, embed_fn) -> array:
     """Embed the query with the same model, prefix, and centering the corpus used."""
     if not _has_vectors(con):
-        raise VectorsUnavailable("db has no vectors — run: gloss embed --db <db>")
+        raise VectorsUnavailable("db has no vectors — run: docq embed --db <db>")
     meta = con.execute("SELECT * FROM vectors_meta").fetchone()
     fn = embed_fn or (lambda texts: ollama_embed(texts, meta["model"], base_url))
     try:
@@ -308,5 +308,5 @@ def search_auto(db_path: Path, query: str, k: int = 5,
         return search_hybrid(db_path, query, k=k, principles=principles, types=types,
                              base_url=base_url, embed_fn=embed_fn)
     except VectorsUnavailable as e:
-        print(f"gloss: semantic channel off ({e}); lexical only", file=sys.stderr)
+        print(f"docq: semantic channel off ({e}); lexical only", file=sys.stderr)
         return search(db_path, query, k=k, principles=principles, types=types)

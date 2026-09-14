@@ -6,7 +6,7 @@ one angle family — this pass adds 4-6 more from angles the first pass didn't c
 Operates on the build checkpoints (``units.jsonl``), never the db: for each enriched
 row it appends a row copy with ``questions = old + new`` under the same key, which
 supersedes the original on read-back (last-wins). A subsequent
-``gloss build --resume`` then ships the merged questions with zero re-enrichment;
+``docq build --resume`` then ships the merged questions with zero re-enrichment;
 re-embed after — a rebuild wipes the vectors table.
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from .build import _DEFAULT_INSTANCE, estimate_num_ctx, load_prompt
+from .build import estimate_num_ctx, load_prompt
 from .enrich import rows_by_key
 from .extract import OllamaExtractor, StructuredExtractor
 from .taxonomy import card_for, load_taxonomy, principle_for_chapter
@@ -120,7 +120,7 @@ def topup_questions(build_dir: Path, taxonomy: dict, extractor: StructuredExtrac
     return counts
 
 
-def run_topup(model: str, build_dir: Path, instance: Path = _DEFAULT_INSTANCE,
+def run_topup(model: str, build_dir: Path, instance: Path,
               extractor=None, workers: int = 1) -> dict:
     """Top up a build's checkpoints end-to-end (CLI entry).
 
@@ -141,6 +141,6 @@ def run_topup(model: str, build_dir: Path, instance: Path = _DEFAULT_INSTANCE,
     counts = topup_questions(Path(build_dir), taxonomy, extractor, template=template,
                              system=system, max_workers=workers)
     print(f"topped up {counts['topped_up']} units ({counts['failed']} failed) in {build_dir}")
-    print(f"ship it: gloss build --resume --db <db> --build-dir {build_dir} "
-          f"&& gloss embed --db <db>")
+    print(f"ship it: docq build --resume --db <db> --build-dir {build_dir} "
+          f"&& docq embed --db <db>")
     return counts

@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the gloss engine tests."""
+"""Shared pytest fixtures for the docq engine tests."""
 from __future__ import annotations
 
 import os

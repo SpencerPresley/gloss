@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from gloss.store import build_db
-from gloss.evalrun import score_cases
+from docq.store import build_db
+from docq.evalrun import score_cases
 
 _ROWS = [
     {"text": "A module with a complex interface for little functionality is shallow.",
@@ -50,7 +50,7 @@ def test_rank_metrics_via_injected_search():
 
 
 def test_paired_sign_flip():
-    from gloss.evalrun import paired_sign_flip
+    from docq.evalrun import paired_sign_flip
     # identical rankings -> zero delta, p = 1.0
     delta, p = paired_sign_flip([1, 2, None], [1, 2, None])
     assert delta == 0.0 and p == 1.0

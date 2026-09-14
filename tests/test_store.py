@@ -1,4 +1,4 @@
-from gloss.store import build_db, get_unit, search, to_match_query
+from docq.store import build_db, get_unit, search, to_match_query
 
 ROWS = [
     {"text": "A module with a complex interface for little functionality is shallow.",

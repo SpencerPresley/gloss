@@ -1,9 +1,9 @@
 import json
 
-from gloss.enrich import enrich_units, rows_by_key
-from gloss.extract import StubExtractor
-from gloss.segment import RawUnit
-from gloss.topup import build_topup_prompt, topup_questions
+from docq.enrich import enrich_units, rows_by_key
+from docq.extract import StubExtractor
+from docq.segment import RawUnit
+from docq.topup import build_topup_prompt, topup_questions
 
 _TAXONOMY = {"principles": [{"slug": "deep-modules", "name": "Deep Modules",
                              "vocabulary": ["deep module", "shallow module"]}],
@@ -70,7 +70,7 @@ def test_topup_skips_failed_enrichment_rows(tmp_path):
 
 
 def test_topup_failure_appends_nothing_and_is_retried_next_run(tmp_path, monkeypatch):
-    monkeypatch.setattr("gloss.topup.time.sleep", lambda s: None)   # skip retry backoff
+    monkeypatch.setattr("docq.topup.time.sleep", lambda s: None)   # skip retry backoff
 
     class _Boom:
         model = "boom"

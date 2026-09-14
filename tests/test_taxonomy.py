@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from gloss.taxonomy import load_taxonomy, principle_for_chapter, card_for
+from docq.taxonomy import load_taxonomy, principle_for_chapter, card_for
 
 _YAML = """
 principles:
@@ -35,7 +35,7 @@ def test_card_for_renders_vocab(tmp_path):
 
 
 def test_real_taxonomy_topic_principles_are_known_slugs():
-    from gloss.taxonomy import load_taxonomy, principle_for_chapter
+    from docq.taxonomy import load_taxonomy, principle_for_chapter
     tax = load_taxonomy(Path("corpora/aposd/taxonomy.yaml"))
     slugs = {p["slug"] for p in tax["principles"]}
     for topic in tax["topics"]:

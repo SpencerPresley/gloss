@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from gloss.extract import StubExtractor, OllamaExtractor
+from docq.extract import StubExtractor, OllamaExtractor
 
 
 class _S(BaseModel):

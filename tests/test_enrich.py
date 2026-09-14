@@ -1,6 +1,6 @@
-from gloss.segment import RawUnit
-from gloss.extract import StubExtractor
-from gloss.enrich import enrich_units, build_prompt
+from docq.segment import RawUnit
+from docq.extract import StubExtractor
+from docq.enrich import enrich_units, build_prompt
 
 _STUB = {"principle": "general-purpose", "type": "rationale",
          "context_line": "Ch.6 on general-purpose APIs.",
@@ -69,9 +69,9 @@ def test_enrich_flags_failure(tmp_path):
 
 def test_enrich_units_concurrent_writes_all_without_dupes(tmp_path):
     import json
-    from gloss.segment import RawUnit
-    from gloss.extract import StubExtractor
-    from gloss.enrich import enrich_units
+    from docq.segment import RawUnit
+    from docq.extract import StubExtractor
+    from docq.enrich import enrich_units
     units = [RawUnit(f"passage number {i}", "6", "6.1", 50) for i in range(20)]
     sect = {"6.1": "section text"}
     stub = StubExtractor({"principle": "general-purpose", "type": "rationale",
@@ -88,9 +88,9 @@ def test_enrich_units_concurrent_writes_all_without_dupes(tmp_path):
 
 def test_enrich_units_concurrent_resumes(tmp_path):
     import json
-    from gloss.segment import RawUnit
-    from gloss.extract import StubExtractor
-    from gloss.enrich import enrich_units
+    from docq.segment import RawUnit
+    from docq.extract import StubExtractor
+    from docq.enrich import enrich_units
     units = [RawUnit(f"passage {i}", "6", "6.1", 50) for i in range(10)]
     sect = {"6.1": "s"}
     stub = StubExtractor({"principle": "general-purpose", "type": "rationale",
@@ -110,9 +110,9 @@ def test_enrich_units_concurrent_builds_chat_once(tmp_path):
     # The warmup must build the OllamaExtractor's chat (and pin its method) ONCE before the
     # pool starts, so concurrent workers only READ shared state — no lazy-init/probe race.
     import threading
-    from gloss.segment import RawUnit
-    from gloss.extract import OllamaExtractor
-    from gloss.enrich import enrich_units, Enrichment
+    from docq.segment import RawUnit
+    from docq.extract import OllamaExtractor
+    from docq.enrich import enrich_units, Enrichment
 
     builds = []
     lock = threading.Lock()
@@ -142,10 +142,10 @@ def test_enrich_units_concurrent_builds_chat_once(tmp_path):
 def test_enrich_resumes_failed_units_without_dup_rows(tmp_path, monkeypatch):
     # A quota-cap failure must NOT be baked permanently: a later --resume re-enriches
     # the failed units, and the recovered success must not create a duplicate row.
-    monkeypatch.setattr("gloss.enrich.time.sleep", lambda s: None)  # skip retry backoff
+    monkeypatch.setattr("docq.enrich.time.sleep", lambda s: None)  # skip retry backoff
     import json
-    from gloss.segment import RawUnit
-    from gloss.enrich import enrich_units
+    from docq.segment import RawUnit
+    from docq.enrich import enrich_units
     payload = {"principle": "general-purpose", "type": "rationale", "context_line": "c",
                "applies_when": "a", "key_terms": ["k"], "questions": ["q?"]}
 

@@ -14,12 +14,9 @@ from .enrich import build_prompt, enrich_units
 from .extract import OllamaExtractor
 from .taxonomy import load_taxonomy, principle_for_chapter, card_for
 
-_DEFAULT_INSTANCE = Path("corpora/aposd")
-
-
 def load_profile(instance: Path):
     """Import the corpus instance's Profile (its module-level ``APOSD``)."""
-    spec = importlib.util.spec_from_file_location("_gloss_instance_profile", Path(instance) / "profile.py")
+    spec = importlib.util.spec_from_file_location("_docq_instance_profile", Path(instance) / "profile.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.APOSD
@@ -44,7 +41,7 @@ def estimate_num_ctx(prompts: list[str], system: str,
     return max(floor, min(need, cap))
 
 
-def run_build(chapter, model, db, resume, instance: Path = _DEFAULT_INSTANCE,
+def run_build(chapter, model, db, resume, instance: Path,
               extractor=None, build_dir: Path = Path("build"), workers: int = 1):
     """Build the corpus db: one chapter (``chapter`` set) or the whole book (``chapter`` None).
 

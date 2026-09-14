@@ -617,7 +617,7 @@ cases:
   # ==== agent-voice tranche (2026-07-10) ====
   # Queries phrased the way the consuming agent (Claude, mid-workflow) actually
   # issues them, in the two intended workflows:
-  #   [design]   task arrives -> skill invoked -> gloss consulted per design
+  #   [design]   task arrives -> skill invoked -> docq consulted per design
   #              decision while ironing out the approach. Shape: prescriptive
   #              decision questions, alternatives held side by side, compact.
   #   [refactor] reviewing existing code for improvement. Shape: third-person

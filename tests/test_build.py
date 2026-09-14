@@ -1,5 +1,5 @@
 from pathlib import Path
-from gloss.build import estimate_num_ctx, load_prompt, load_profile
+from docq.build import estimate_num_ctx, load_prompt, load_profile
 
 _INSTANCE = Path("corpora/aposd")
 
@@ -27,13 +27,13 @@ def test_estimate_num_ctx_floor_and_cap():
 
 def test_run_build_whole_book_accumulates_all_chapters(tmp_path, corpus_path):
     import sqlite3
-    from gloss.build import run_build
-    from gloss.extract import StubExtractor
+    from docq.build import run_build
+    from docq.extract import StubExtractor
     stub = StubExtractor({"principle": "general-purpose", "type": "rationale",
                           "context_line": "c", "applies_when": "a",
                           "key_terms": ["k"], "questions": ["q?"]})
     db = tmp_path / "aposd.db"
-    rows = run_build(chapter=None, model="stub", db=db, resume=False,
+    rows = run_build(chapter=None, model="stub", db=db, resume=False, instance=_INSTANCE,
                      extractor=stub, build_dir=tmp_path / "build")
     con = sqlite3.connect(db)
     con.row_factory = sqlite3.Row
@@ -45,13 +45,13 @@ def test_run_build_whole_book_accumulates_all_chapters(tmp_path, corpus_path):
 
 def test_run_build_single_chapter_still_works(tmp_path, corpus_path):
     import sqlite3
-    from gloss.build import run_build
-    from gloss.extract import StubExtractor
+    from docq.build import run_build
+    from docq.extract import StubExtractor
     stub = StubExtractor({"principle": "general-purpose", "type": "rationale",
                           "context_line": "c", "applies_when": "a",
                           "key_terms": ["k"], "questions": ["q?"]})
     db = tmp_path / "ch6.db"
-    rows = run_build(chapter="6", model="stub", db=db, resume=False,
+    rows = run_build(chapter="6", model="stub", db=db, resume=False, instance=_INSTANCE,
                      extractor=stub, build_dir=tmp_path / "build")
     con = sqlite3.connect(db)
     con.row_factory = sqlite3.Row
@@ -64,13 +64,13 @@ def test_run_build_single_chapter_still_works(tmp_path, corpus_path):
 
 def test_run_build_indexes_summary_appendices(tmp_path, corpus_path):
     import sqlite3
-    from gloss.build import run_build
-    from gloss.extract import StubExtractor
+    from docq.build import run_build
+    from docq.extract import StubExtractor
     stub = StubExtractor({"principle": "general-purpose", "type": "red_flag",
                           "context_line": "c", "applies_when": "a",
                           "key_terms": ["k"], "questions": ["q?"]})
     db = tmp_path / "aposd.db"
-    run_build(chapter=None, model="stub", db=db, resume=False,
+    run_build(chapter=None, model="stub", db=db, resume=False, instance=_INSTANCE,
               extractor=stub, build_dir=tmp_path / "build")
     con = sqlite3.connect(db)
     con.row_factory = sqlite3.Row
@@ -85,13 +85,13 @@ def test_run_build_sets_principle_from_taxonomy_not_llm(tmp_path, corpus_path):
     # A stub returning a bogus principle must be overridden: carded chapter -> its taxonomy
     # slug; null chapter and appendix -> "" (empty), never an invented slug.
     import sqlite3
-    from gloss.build import run_build
-    from gloss.extract import StubExtractor
+    from docq.build import run_build
+    from docq.extract import StubExtractor
     stub = StubExtractor({"principle": "bogus_invented_slug", "type": "rationale",
                           "context_line": "c", "applies_when": "a",
                           "key_terms": ["k"], "questions": ["q?"]})
     db = tmp_path / "aposd.db"
-    run_build(chapter=None, model="stub", db=db, resume=False,
+    run_build(chapter=None, model="stub", db=db, resume=False, instance=_INSTANCE,
               extractor=stub, build_dir=tmp_path / "build")
     con = sqlite3.connect(db)
     con.row_factory = sqlite3.Row
@@ -106,11 +106,12 @@ def test_run_build_sets_principle_from_taxonomy_not_llm(tmp_path, corpus_path):
 
 def test_run_build_unknown_chapter_raises(tmp_path, corpus_path):
     import pytest
-    from gloss.build import run_build
-    from gloss.extract import StubExtractor
+    from docq.build import run_build
+    from docq.extract import StubExtractor
     stub = StubExtractor({"principle": "general-purpose", "type": "rationale",
                           "context_line": "c", "applies_when": "a",
                           "key_terms": ["k"], "questions": ["q?"]})
     with pytest.raises(SystemExit):
         run_build(chapter="999", model="stub", db=tmp_path / "x.db", resume=False,
+                  instance=_INSTANCE,
                   extractor=stub, build_dir=tmp_path / "build")

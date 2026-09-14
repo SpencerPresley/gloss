@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from gloss.store import build_db
-from gloss.vectors import (DOC_PREFIX, QUERY_PREFIX, VectorsUnavailable, _chunks,
+from docq.store import build_db
+from docq.vectors import (DOC_PREFIX, QUERY_PREFIX, VectorsUnavailable, _chunks,
                            _pack, _unpack, embed_corpus, search_auto,
                            search_hybrid, search_semantic)
 

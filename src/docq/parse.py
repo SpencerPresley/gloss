@@ -3,7 +3,7 @@
 Turns a PDF page range into ordered structural :class:`Element` objects (headings,
 paragraphs, code blocks, figures) in reading order. A later segment stage groups
 these into retrieval units. All document-specific thresholds come from a
-:class:`~gloss.profile.Profile`, never hardcoded here.
+:class:`~docq.profile.Profile`, never hardcoded here.
 """
 from __future__ import annotations
 

@@ -1,0 +1,12 @@
+{
+  "db": "build/minimax-v2.db",
+  "build": {
+    "instance": "corpora/aposd"
+  },
+  "enrich-questions": {
+    "instance": "corpora/aposd"
+  },
+  "eval": {
+    "cases": "corpora/aposd/cases.yaml"
+  }
+}

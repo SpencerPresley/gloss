@@ -116,7 +116,7 @@ wheels = [
 ]
 
 [[package]]
-name = "gloss"
+name = "docq"
 version = "0.1.0"
 source = { editable = "." }
 
